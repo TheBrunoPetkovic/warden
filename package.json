@@ -1,0 +1,17 @@
+{
+  "name": "warden",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "spike:opencode": "node --experimental-strip-types spike/opencode.ts",
+    "spike:codex": "node --experimental-strip-types spike/codex.ts",
+    "dev": "node --experimental-strip-types src/index.ts"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "^1.18.33"
+  }
+}
