@@ -10,3 +10,6 @@ spike/codex-proto/
 spike/codex-sandbox/
 spike/sandbox/*.txt
 spike/sandbox/node_modules/
+shot-*.png
+dbg.mjs
+spike/sandbox/probe.txt

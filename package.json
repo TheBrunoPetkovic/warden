@@ -12,6 +12,15 @@
     "dev": "node --experimental-strip-types src/index.ts"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.18.33"
+    "@opencode-ai/sdk": "^1.18.33",
+    "@radix-ui/colors": "^3.0.0",
+    "@types/ws": "^8.18.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.1.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
   }
 }
