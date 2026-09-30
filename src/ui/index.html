@@ -47,21 +47,8 @@ body {
 #root { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* ---- top bar ---- */
-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-  flex: none;
-}
-header .mark { font-weight: 600; letter-spacing: .08em; font-size: 12px; }
-.status { display: flex; align-items: center; gap: 6px; color: var(--fg-subtle); font-size: 11px; }
-.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gray-8); }
-.dot.live { background: var(--ok); }
-.spacer { flex: 1; }
-.hint { color: var(--fg-subtle); font-size: 11px; }
-
 /* ---- layout ---- */
+.spacer { flex: 1; }
 main { flex: 1; display: grid; grid-template-columns: 236px 1fr; min-height: 0; }
 
 /* The canvas owns the entire primary column; terminal chats mount only in the

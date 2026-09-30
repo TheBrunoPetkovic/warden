@@ -70,7 +70,6 @@ export function App() {
   const [termsByWorkspace, setTermsByWorkspace] = useState({});
   const [side, setSide] = useState(null);
   const [sideWidth, setSideWidth] = useState(420);
-  const [connected, setConnected] = useState(false);
   const [toast, setToast] = useState("");
   const activeWorkspace = workspaces.find(workspace => workspace.id === activeWs);
   const terminals = termsByWorkspace[activeWs] ?? [];
@@ -101,13 +100,6 @@ export function App() {
       } catch (error) { notify(error.message); }
     })();
   }, [loadWorkspaces, notify, syncTerminals]);
-  useEffect(() => {
-    const stream = new EventSource("/api/stream");
-    stream.onopen = () => setConnected(true);
-    stream.onerror = () => setConnected(false);
-    return () => stream.close();
-  }, []);
-
   const openWorkspace = useCallback(async workspace => {
     if (workspace.missing) return notify(`"${workspace.name}" — its directory no longer exists.`);
     if (workspace.id === activeWs) return;
@@ -155,7 +147,5 @@ export function App() {
     ? <SubagentActivity node={side.node} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onToast={notify}/>
     : sideTerminal ? <SideTerminal node={side.node} terminal={sideTerminal} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onExit={markExited} onToast={notify}/>
       : null;
-  const summary = `${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}${workspaces.some(workspace => workspace.missing) ? ` · ${workspaces.filter(workspace => workspace.missing).length} missing` : ""}`;
-
-  return <><header><span className="mark">WARDEN</span><span className="status"><span className={`dot${connected ? " live" : ""}`}/><span>{connected ? "connected" : "reconnecting"}</span></span><span className="spacer"/><span className="hint">{workspaces.length ? summary : ""}</span></header><main><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace} onNewAgent={createAgent}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/><div id="status"><span className="path">{activeWorkspace ? `${activeWorkspace.name} · select an agent to open its chat` : "No workspace open"}</span></div></div></section></main><div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></>;
+  return <><main><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace} onNewAgent={createAgent}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/><div id="status"><span className="path">{activeWorkspace ? `${activeWorkspace.name} · select an agent to open its chat` : "No workspace open"}</span></div></div></section></main><div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></>;
 }

@@ -197,7 +197,7 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
   }, [workspaceId]);
 
   const nodes = useMemo(() => {
-    const decorate = node => ({ ...node, visualState: node.state === "complete" ? (seen.has(node.id) ? "complete-read" : "complete-unread") : (node.state ?? (node.live ? "working" : "idle")) });
+    const decorate = node => ({ ...node, title: node.title || `${node.runtime} agent`, visualState: node.state === "complete" ? (seen.has(node.id) ? "complete-read" : "complete-unread") : (node.state ?? (node.live ? "working" : "idle")) });
     const roots = data.agents.map(agent => decorate({ ...agent, id: agent.sessionId ?? `pid:${agent.pid}`, live: true, sessionId: agent.sessionId }));
     const ids = new Set(roots.map(node => node.id));
     if (showSubagents) data.subagents.forEach(session => { if (!ids.has(session.id)) roots.push(decorate({ ...session, id: session.id, sessionId: session.id, live: false })); });

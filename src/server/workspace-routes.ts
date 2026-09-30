@@ -70,12 +70,14 @@ export async function handleWorkspaceRoutes(
         workspaceId,
         cwd: ws.path,
         shell: DEFAULT_TERM,
+        // Start OpenCode as the PTY's foreground process. Writing a command
+        // into a shell immediately after spawning it races with shell startup
+        // files and was the reason the old New agent button could leave an
+        // idle shell instead of an agent.
+        args: ["-lic", "exec opencode"],
         cols: 100,
         rows: 28,
       });
-      // A shell's input buffer survives its profile startup, so this does not
-      // depend on a browser websocket reaching the pane first.
-      pool.write(term.id, "opencode\r");
       return json(res, 201, { id: term.id, workspaceId, path: ws.path, runtime: "opencode", pid: term.pty.pid }), true;
     }
 

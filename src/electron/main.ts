@@ -15,6 +15,9 @@ function createWindow() {
     minWidth: 900,
     minHeight: 620,
     title: "Warden",
+    // Keep macOS window controls, but do not reserve a branded application
+    // header above the agent workspace.
+    titleBarStyle: "hiddenInset",
     backgroundColor: "#111318",
     webPreferences: {
       // The renderer is a normal, sandboxed web page. PTYs and filesystem

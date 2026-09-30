@@ -60,6 +60,8 @@ export class PtyPool {
     workspaceId: string;
     cwd: string;
     shell: string;
+    /** Explicit argv for a purpose-built pane (for example an agent runtime). */
+    args?: string[];
     cols?: number;
     rows?: number;
   }): Promise<Terminal> {
@@ -70,7 +72,7 @@ export class PtyPool {
     const cols = Math.max(20, opts.cols ?? 80);
     const rows = Math.max(5, opts.rows ?? 24);
 
-    const proc = pty.spawn(opts.shell, ["-l"], {
+    const proc = pty.spawn(opts.shell, opts.args ?? ["-l"], {
       name: "xterm-256color",
       cols,
       rows,
