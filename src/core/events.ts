@@ -34,6 +34,12 @@ export interface PermissionRequest {
   raw?: unknown;
 }
 
+export interface InputRequest {
+  requestId: string;
+  sessionId: string;
+  summary: string;
+}
+
 export type NormalizedEvent =
   | { kind: "session.created"; at: number; runtime: Runtime; session: SessionInfo }
   | { kind: "session.status"; at: number; runtime: Runtime; sessionId: string; status: SessionStatus; detail?: string }
@@ -44,6 +50,8 @@ export type NormalizedEvent =
   | { kind: "tool.completed"; at: number; runtime: Runtime; sessionId: string; callId: string; tool: string; status: string; output?: string }
   | { kind: "permission.requested"; at: number; runtime: Runtime; request: PermissionRequest }
   | { kind: "permission.resolved"; at: number; runtime: Runtime; sessionId: string; permissionId: string; response: string }
+  | { kind: "input.requested"; at: number; runtime: Runtime; request: InputRequest }
+  | { kind: "input.resolved"; at: number; runtime: Runtime; sessionId: string; requestId: string }
   | { kind: "diff"; at: number; runtime: Runtime; sessionId: string; diff: unknown }
   | { kind: "runtime.log"; at: number; runtime: Runtime; level: "info" | "warn" | "error"; message: string };
 

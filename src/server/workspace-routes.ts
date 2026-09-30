@@ -57,6 +57,28 @@ export async function handleWorkspaceRoutes(
       return json(res, 201, ws), true;
     }
 
+    // Agent-first UI entry point. The raw-shell route remains for internal
+    // terminal lifecycle compatibility, but this endpoint only starts the
+    // supported interactive runtime and never accepts arbitrary commands.
+    const newAgent = path.match(/^\/api\/workspaces\/([^/]+)\/agents$/);
+    if (newAgent && method === "POST") {
+      const workspaceId = decodeURIComponent(newAgent[1]);
+      const ws = await store.get(workspaceId);
+      if (!ws) return json(res, 404, { error: "workspace not found" }), true;
+      if (store.missing(ws)) return json(res, 409, { error: `workspace directory is gone: ${ws.path}` }), true;
+      const term = await pool.spawn({
+        workspaceId,
+        cwd: ws.path,
+        shell: DEFAULT_TERM,
+        cols: 100,
+        rows: 28,
+      });
+      // A shell's input buffer survives its profile startup, so this does not
+      // depend on a browser websocket reaching the pane first.
+      pool.write(term.id, "opencode\r");
+      return json(res, 201, { id: term.id, workspaceId, path: ws.path, runtime: "opencode", pid: term.pty.pid }), true;
+    }
+
     const one = path.match(/^\/api\/workspaces\/([^/]+)$/);
     if (one && method === "GET") {
       const ws = await store.get(decodeURIComponent(one[1]));

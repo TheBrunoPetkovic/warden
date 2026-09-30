@@ -1,6 +1,7 @@
 # Warden
 
-A local control room for CLI coding agents. Launch them, watch them work, and approve what they do.
+A local desktop control room for CLI coding agents. Launch them, watch them
+work, and talk to them without juggling terminal tabs.
 
 > **Status: Phase 0 complete.** Both adapters are validated end to end — including the permission approval loop. No UI yet. See [Roadmap](#roadmap).
 
@@ -10,11 +11,11 @@ A local control room for CLI coding agents. Launch them, watch them work, and ap
 
 Agent CLIs got *very* good at work and very bad at supervision.
 
-`claude agents`, `opencode`, and `codex` all run agents in the background now, and all three give you a way to *launch* them. None give you a way to *watch several at once* in a browser, and none give you a good way to say "yes, do that" when a tool call needs a human.
+`claude agents`, `opencode`, and `codex` all run agents in the background now, and all three give you a way to *launch* them. None give you a way to *watch several at once* in one desktop workspace, and none give you a good way to say "yes, do that" when a tool call needs a human.
 
 So you end up with terminal tabs. Six agents means six tabs, and you find out what happened by scrolling up through scrollback. Worse, approval prompts are blocking and modal — one agent asking permission freezes the tab you're looking at.
 
-Warden is a local web app that:
+Warden is a local Electron app that:
 
 - **launches** agents itself, so it owns the process and the session handle
 - **streams** every event from every agent onto one canvas
@@ -50,9 +51,9 @@ One adapter interface, two implementations, one global event stream per runtime.
 
 ```
 ┌──────────────┐
-│  Browser UI  │  sessions, live canvas, approval queue
+│Electron UI   │  agent canvas, chats, approval queue
 └──────┬───────┘
-       │  SSE  (one connection, all sessions)
+       │ loopback-only HTTP / SSE / terminal WS
 ┌──────┴───────┐
 │  Warden core │  normalizes runtime events → one event model
 └──┬────────┬──┘
@@ -73,6 +74,31 @@ git clone https://github.com/TheBrunoPetkovic/warden
 cd warden
 npm install
 ```
+
+Start the desktop app:
+
+```bash
+npm run dev
+```
+
+This builds the React renderer, starts Warden's local backend on an ephemeral
+loopback port, and opens a native Electron window. End users do not run a
+server or open a browser tab. OpenCode still needs to be installed and on
+`PATH`, because Warden launches the locally installed CLI.
+
+Build a local macOS app bundle:
+
+```bash
+npm run package:mac
+```
+
+The result is `release/Warden-darwin-arm64/Warden.app`. It is a local,
+unsigned build; distribute it only after adding signing and notarization.
+
+Electron's main process owns the PTY pool and runtime adapters. The renderer
+has no Node integration and is sandboxed; it talks only to the app's
+loopback-only internal transport. `node-pty` is rebuilt against Electron as
+part of packaging.
 
 Run the spikes that produced the findings:
 

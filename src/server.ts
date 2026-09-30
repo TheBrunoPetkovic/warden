@@ -7,13 +7,15 @@ import { WorkspaceStore } from "./workspaces/store.ts";
 import { PtyPool } from "./pty/pool.ts";
 import { handleWorkspaceRoutes } from "./server/workspace-routes.ts";
 import { attachTerminalSocket } from "./server/terminal-ws.ts";
-import { buildAgentGraph } from "./graph/agents.ts";
+import { buildAgentGraph, readOpenCodeActivity, type AgentState } from "./graph/agents.ts";
 import { layout } from "./graph/layout.ts";
 import { detectLiveAgents } from "./graph/live.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const UI = join(__dirname, "ui");
-const ROOT = join(__dirname, "..");
+// The browser app is built by Vite. Keeping its output beneath src/ui makes the
+// runtime server self-contained while Vite's development server can proxy API
+// and terminal-websocket traffic during UI work.
+const DEFAULT_UI = join(__dirname, "ui", "dist");
 
 /**
  * The UI is edited constantly during development and served without a build
@@ -21,24 +23,6 @@ const ROOT = join(__dirname, "..");
  * no-store beats letting the browser guess from a heuristic.
  */
 const NO_STORE = "no-store, must-revalidate";
-
-/**
- * Only these package subtrees are reachable over HTTP. xterm and the Radix
- * colour scales are served from node_modules so the tool runs offline with no
- * CDN and no bundler; everything else stays unreachable.
- */
-const VENDOR_MAP: Record<string, string> = {
-  "/vendor/xterm.js": "@xterm/xterm/lib/xterm.js",
-  "/vendor/xterm-addon-fit.js": "@xterm/addon-fit/lib/addon-fit.js",
-  "/vendor/xterm.css": "@xterm/xterm/css/xterm.css",
-  "/vendor/radix/gray/dark.css": "@radix-ui/colors/gray-dark.css",
-  "/vendor/radix/blue/dark.css": "@radix-ui/colors/blue-dark.css",
-  "/vendor/radix/green/dark.css": "@radix-ui/colors/green-dark.css",
-  "/vendor/radix/amber/dark.css": "@radix-ui/colors/amber-dark.css",
-  "/vendor/radix/red/dark.css": "@radix-ui/colors/red-dark.css",
-  "/vendor/radix/cyan/dark.css": "@radix-ui/colors/cyan-dark.css",
-  "/vendor/radix/iris/dark.css": "@radix-ui/colors/iris-dark.css",
-};
 
 const json = (res: ServerResponse, code: number, body: unknown) => {
   const s = JSON.stringify(body);
@@ -59,6 +43,33 @@ const readBody = (req: IncomingMessage): Promise<any> =>
     });
   });
 
+/** Overlay pending runtime questions and permission gates onto the durable
+ * session state. The event bus is deliberately optional: a terminal-only
+ * Warden never starts the SDK server, while an attached server can report a
+ * precise red "needs input" state immediately. */
+function stateWithRuntimeAttention(bus: EventBus, base: Map<string, AgentState>) {
+  const attention = new Map<string, string>();
+  const requestSession = new Map<string, string>();
+  for (const event of bus.history()) {
+    if (event.kind === "permission.requested") {
+      attention.set(event.request.sessionId, "needs-input");
+      requestSession.set(`permission:${event.request.permissionId}`, event.request.sessionId);
+    } else if (event.kind === "permission.resolved") {
+      const sessionId = requestSession.get(`permission:${event.permissionId}`) ?? event.sessionId;
+      attention.delete(sessionId);
+    } else if (event.kind === "input.requested") {
+      attention.set(event.request.sessionId, "needs-input");
+      requestSession.set(`input:${event.request.requestId}`, event.request.sessionId);
+    } else if (event.kind === "input.resolved") {
+      const sessionId = requestSession.get(`input:${event.requestId}`) ?? event.sessionId;
+      attention.delete(sessionId);
+    }
+  }
+  return (sessionId?: string): AgentState => sessionId && attention.has(sessionId)
+    ? "needs-input"
+    : (sessionId ? base.get(sessionId) : undefined) ?? "working";
+}
+
 export interface Adapter {
   listSessions(): Promise<any[]>;
   createSession(directory: string): Promise<string>;
@@ -68,7 +79,8 @@ export interface Adapter {
   resolvePermission(sessionId: string, permissionId: string, response: "once" | "always" | "reject"): Promise<boolean>;
 }
 
-export function startServer(bus: EventBus, adapter: Adapter, port: number) {
+export function startServer(bus: EventBus, adapter: Adapter, port: number, options: { uiDir?: string } = {}) {
+  const UI = options.uiDir ?? DEFAULT_UI;
   const store = new WorkspaceStore();
   const pool = new PtyPool();
 
@@ -134,7 +146,13 @@ export function startServer(bus: EventBus, adapter: Adapter, port: number) {
 
       const msgs = path.match(/^\/api\/sessions\/([^/]+)\/messages$/);
       if (msgs && req.method === "GET") {
-        const arr: any[] = await adapter.messages(decodeURIComponent(msgs[1]));
+        const sessionId = decodeURIComponent(msgs[1]);
+        const activity = readOpenCodeActivity(sessionId);
+        if (activity !== null) return json(res, 200, activity);
+        // The activity panel can be the first OpenCode feature the user opens,
+        // so it must be able to start the adapter just like the session routes.
+        await ensureAdapter();
+        const arr: any[] = await adapter.messages(sessionId);
         // Flatten to something a log view can render without walking parts.
         return json(
           res,
@@ -173,6 +191,7 @@ export function startServer(bus: EventBus, adapter: Adapter, port: number) {
         const ws = await store.get(live);
         if (!ws) return json(res, 404, { error: "workspace not found" });
         const history = await buildAgentGraph();
+        const stateFor = stateWithRuntimeAttention(bus, new Map(history.nodes.map(node => [node.id, node.state])));
         const shellPids = new Map<number, string>();
         for (const t of pool.list()) {
           if (t.pid && t.alive) shellPids.set(t.pid, t.id);
@@ -192,7 +211,7 @@ export function startServer(bus: EventBus, adapter: Adapter, port: number) {
         );
         return json(res, 200, {
           workspace: { id: ws.id, name: ws.name, path: ws.path },
-          agents,
+          agents: agents.map(agent => ({ ...agent, state: stateFor(agent.sessionId) })),
           subagents: subagents.map(n => ({
             id: n.id,
             title: n.title,
@@ -200,6 +219,7 @@ export function startServer(bus: EventBus, adapter: Adapter, port: number) {
             parentId: n.parentId,
             updated: n.updated,
             tokens: n.tokens,
+            state: stateFor(n.id),
           })),
         });
       }
@@ -238,14 +258,6 @@ export function startServer(bus: EventBus, adapter: Adapter, port: number) {
 
       if (await handleWorkspaceRoutes(path, req.method ?? "GET", req, res, store, pool)) return;
 
-      for (const name of ["app.js", "graph.js"]) {
-        if (path === `/${name}`) {
-          const body = await readFile(join(UI, name), "utf8");
-          res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": NO_STORE });
-          return res.end(body);
-        }
-      }
-
       if (path === "/favicon.ico") {
         res.writeHead(204);
         return res.end();
@@ -257,20 +269,22 @@ export function startServer(bus: EventBus, adapter: Adapter, port: number) {
         return res.end(html);
       }
 
-      // Static assets, mapped explicitly rather than by path walking: a
-      // lookup table cannot be talked into reading ../../.ssh/id_rsa.
-      const asset = VENDOR_MAP[path];
-      if (path.startsWith("/vendor/")) {
-        if (!asset) return json(res, 404, { error: "not found" });
-        const file = join(ROOT, "node_modules", asset);
-        const type = asset.endsWith(".css") ? "text/css" : "text/javascript";
-        try {
-          const body = await readFile(file);
-          res.writeHead(200, { "content-type": `${type}; charset=utf-8` });
-          return res.end(body);
-        } catch {
+      // Vite emits immutable, content-hashed browser assets. The path is
+      // deliberately restricted to that directory so this does not become a
+      // generic filesystem server.
+      if (path.startsWith("/assets/")) {
+        const relative = path.slice("/assets/".length);
+        if (!relative || relative.includes("..") || !/^[A-Za-z0-9._-]+$/.test(relative)) {
           return json(res, 404, { error: "not found" });
         }
+        const body = await readFile(join(UI, "assets", relative));
+        const type = relative.endsWith(".css")
+          ? "text/css"
+          : relative.endsWith(".js")
+            ? "text/javascript"
+            : "application/octet-stream";
+        res.writeHead(200, { "content-type": `${type}; charset=utf-8`, "cache-control": "public, max-age=31536000, immutable" });
+        return res.end(body);
       }
 
       return json(res, 404, { error: "not found" });
@@ -326,7 +340,8 @@ function listenWithFallback(server: Server, port: number, attempts = 10): Promis
       server.removeListener("error", onError);
       // Surface later runtime errors (e.g. socket close) instead of crashing silently.
       server.on("error", e => console.error("[warden] server error:", e.message));
-      resolve(candidate);
+      const address = server.address();
+      resolve(typeof address === "object" && address ? address.port : candidate);
     });
   });
 }

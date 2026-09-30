@@ -16,6 +16,8 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+export type AgentState = "working" | "needs-input" | "complete" | "idle" | "failed";
+
 export interface AgentNode {
   id: string;
   runtime: "opencode" | "codex" | "claude";
@@ -26,6 +28,8 @@ export interface AgentNode {
   updated: number;
   /** Touched within ACTIVE_WINDOW_MS. Not proof of a live process. */
   active: boolean;
+  /** A conservative state inferred from the runtime's persisted conversation. */
+  state: AgentState;
   cost?: number;
   tokens?: number;
 }
@@ -46,6 +50,92 @@ const ACTIVE_WINDOW_MS = 5 * 60 * 1000;
 
 const opencodeDb = () => join(homedir(), ".local/share/opencode/opencode.db");
 
+const asksForInput = (text: string) =>
+  /\?|\b(let me know|need (?:your|a) |could you|would you|which (?:one|option)|please (?:choose|confirm))\b/i.test(text);
+
+/**
+ * OpenCode persists a terminal assistant message as `finish: "stop"`. That
+ * gives us a useful, read-only completion signal without claiming that an
+ * unchanged session is still executing. A final textual question is surfaced
+ * as input-needed so it receives the highest visual priority.
+ */
+function opencodeStates(db: DatabaseSync): Map<string, AgentState> {
+  const rows = db.prepare(
+    `SELECT m.session_id, m.data AS message,
+       (SELECT p.data FROM part p
+        WHERE p.message_id = m.id AND json_extract(p.data, '$.type') = 'text'
+        ORDER BY p.time_updated DESC LIMIT 1) AS text
+     FROM message m
+     JOIN (SELECT session_id, MAX(time_updated) AS latest FROM message GROUP BY session_id) last
+       ON last.session_id = m.session_id AND last.latest = m.time_updated`,
+  ).all() as { session_id: string; message: string; text?: string }[];
+  const out = new Map<string, AgentState>();
+  for (const row of rows) {
+    try {
+      const message = JSON.parse(row.message);
+      if (message.role === "user") out.set(row.session_id, "working");
+      else if (message.role === "assistant" && (message.error || message.finish === "error" || message.finish === "abort")) out.set(row.session_id, "failed");
+      else if (message.role === "assistant" && message.finish === "stop") {
+        const text = row.text ? JSON.parse(row.text)?.text : "";
+        out.set(row.session_id, typeof text === "string" && asksForInput(text) ? "needs-input" : "complete");
+      } else if (message.role === "assistant") out.set(row.session_id, "working");
+    } catch {
+      // The runtime may be writing a row at the same moment we inspect it.
+    }
+  }
+  return out;
+}
+
+export interface SessionActivity {
+  kind: "text" | "tool";
+  at: number;
+  text?: string;
+  tool?: string;
+  status?: string;
+  input?: unknown;
+  output?: string;
+}
+
+/**
+ * OpenCode's SDK does not reliably return messages for a subagent session, but
+ * its local store has the same immutable message parts that the TUI renders.
+ * This is intentionally read-only and keeps the child as an observation
+ * surface: it cannot steer, resume, or otherwise control the agent.
+ */
+export function readOpenCodeActivity(sessionId: string, limit = 240): SessionActivity[] | null {
+  const file = opencodeDb();
+  if (!existsSync(file)) return null;
+  const db = new DatabaseSync(file, { readOnly: true });
+  try {
+    const rows = db.prepare(
+      `SELECT data, time_updated FROM part WHERE session_id = ? ORDER BY time_created DESC LIMIT ?`,
+    ).all(sessionId, limit) as { data: string; time_updated: number }[];
+    return rows.reverse().flatMap(row => {
+      try {
+        const part = JSON.parse(row.data);
+        if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
+          return [{ kind: "text" as const, at: Number(row.time_updated) || Date.now(), text: part.text }];
+        }
+        if (part.type === "tool") {
+          return [{
+            kind: "tool" as const,
+            at: Number(row.time_updated) || Date.now(),
+            tool: String(part.title ?? part.tool ?? "tool"),
+            status: String(part.state?.status ?? "working"),
+            input: part.state?.input,
+            output: typeof part.state?.output === "string" ? part.state.output : undefined,
+          }];
+        }
+      } catch {
+        // A row written while we are reading can be temporarily incomplete.
+      }
+      return [];
+    });
+  } finally {
+    db.close();
+  }
+}
+
 async function fromOpencode(): Promise<{ nodes: AgentNode[]; error?: string }> {
   const file = opencodeDb();
   if (!existsSync(file)) return { nodes: [], error: "opencode.db not found" };
@@ -54,6 +144,7 @@ async function fromOpencode(): Promise<{ nodes: AgentNode[]; error?: string }> {
   // handle from a second process risks lock contention.
   const db = new DatabaseSync(file, { readOnly: true });
   try {
+    const states = opencodeStates(db);
     const rows = db
       .prepare(
         `SELECT id, title, directory, parent_id, time_created, time_updated, cost,
@@ -72,6 +163,7 @@ async function fromOpencode(): Promise<{ nodes: AgentNode[]; error?: string }> {
       created: Number(r.time_created) || 0,
       updated: Number(r.time_updated) || 0,
       active: now - Number(r.time_updated) < ACTIVE_WINDOW_MS,
+      state: states.get(r.id) ?? "idle",
       cost: Number(r.cost) || 0,
       tokens: Number(r.tokens) || 0,
     }));
@@ -135,6 +227,7 @@ async function fromCodex(): Promise<{ nodes: AgentNode[]; error?: string }> {
         created: Date.parse(meta.timestamp || "") || updated,
         updated,
         active: now - updated < ACTIVE_WINDOW_MS,
+        state: now - updated < ACTIVE_WINDOW_MS ? "working" : "idle",
       });
     } catch {
       // A rollout being written right now can be a partial line; skip it.

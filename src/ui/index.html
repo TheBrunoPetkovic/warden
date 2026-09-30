@@ -4,14 +4,6 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Warden</title>
-<link rel="stylesheet" href="/vendor/xterm.css" />
-<link rel="stylesheet" href="/vendor/radix/gray/dark.css" />
-<link rel="stylesheet" href="/vendor/radix/blue/dark.css" />
-<link rel="stylesheet" href="/vendor/radix/green/dark.css" />
-<link rel="stylesheet" href="/vendor/radix/amber/dark.css" />
-<link rel="stylesheet" href="/vendor/radix/red/dark.css" />
-<link rel="stylesheet" href="/vendor/radix/cyan/dark.css" />
-<link rel="stylesheet" href="/vendor/radix/iris/dark.css" />
 <style>
 /*
  * Radix supplies the ramps as CSS variables (--blue-1 .. --blue-12, etc);
@@ -52,6 +44,7 @@ body {
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
+#root { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* ---- top bar ---- */
 header {
@@ -71,17 +64,8 @@ header .mark { font-weight: 600; letter-spacing: .08em; font-size: 12px; }
 /* ---- layout ---- */
 main { flex: 1; display: grid; grid-template-columns: 236px 1fr; min-height: 0; }
 
-/*
- * Terminal and graph share the right-hand column. Only one is ever mounted, so
- * a stray xterm instance can't keep a websocket or a resize observer alive
- * behind the canvas.
- */
-/*
- * flex: 1 is load-bearing, not decoration. Without it the active view is sized
- * by its content, so #screen collapses to whatever height xterm happened to fit
- * on mount and the rest of the column below it stays empty. The xterm ResizeObserver
- * cannot rescue that: it re-fits to the container, which is itself content-sized.
- */
+/* The canvas owns the entire primary column; terminal chats mount only in the
+ * detachable side panel, never behind the agent graph. */
 .view { display: none; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .view.on { display: flex; }
 
@@ -137,6 +121,14 @@ main { flex: 1; display: grid; grid-template-columns: 236px 1fr; min-height: 0; 
 .ws.gone:hover { opacity: .85; }
 
 #newws { display: flex; gap: 5px; padding: 8px; border-top: 1px solid var(--line); flex: none; }
+#newagent {
+  margin: 6px 8px 0; padding: 7px 8px; width: calc(100% - 16px);
+  border: 1px solid var(--blue-8); border-radius: var(--r-sm);
+  background: var(--blue-3); color: var(--blue-11); font: inherit; font-size: 11px;
+  cursor: pointer; text-align: left;
+}
+#newagent:hover:not(:disabled) { background: var(--blue-4); color: var(--blue-12); }
+#newagent:disabled { opacity: .45; cursor: default; }
 #newws input {
   flex: 1; min-width: 0;
   background: var(--bg); border: 1px solid var(--line);
@@ -146,41 +138,8 @@ main { flex: 1; display: grid; grid-template-columns: 236px 1fr; min-height: 0; 
 #newws input::placeholder { color: var(--fg-subtle); }
 #newws input:focus { border-color: var(--accent); }
 
-/* ---- terminal column ---- */
+/* ---- primary agent workspace ---- */
 #col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-
-#tabs {
-  display: flex; align-items: stretch; gap: 1px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
-  flex: none; overflow-x: auto;
-}
-#tabs:empty { display: none; }
-.tab {
-  display: flex; align-items: center; gap: 7px;
-  padding: 7px 11px;
-  background: var(--bg);
-  border-right: 1px solid var(--line);
-  color: var(--fg-subtle);
-  cursor: pointer; white-space: nowrap;
-  font-size: 11px;
-}
-.tab:hover { color: var(--fg-muted); background: var(--raised); }
-.tab.sel { background: var(--bg); color: var(--fg); box-shadow: inset 0 2px 0 var(--accent); }
-.tab .pip { width: 5px; height: 5px; border-radius: 50%; background: var(--ok); flex: none; }
-.tab.dead .pip { background: var(--danger); }
-.tab .label { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-.tab .close { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 2px; opacity: .5; line-height: 1; }
-.tab .close:hover { opacity: 1; color: var(--danger); }
-.tab.add { padding: 7px 12px; background: var(--surface); }
-
-#screen { flex: 1; min-height: 0; padding: 6px 4px 4px; }
-#screen .xterm { height: 100%; }
-#empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--fg-subtle); }
-#empty code {
-  background: var(--surface); border: 1px solid var(--line);
-  padding: 2px 7px; border-radius: var(--r-sm); color: var(--fg-muted);
-}
 
 #status {
   display: flex; align-items: center; gap: 10px;
@@ -212,16 +171,6 @@ button { font: inherit; }
   opacity: 0; pointer-events: none; transition: opacity .15s;
 }
 #toast.show { opacity: 1; }
-
-/* ---- view switch ---- */
-#viewswitch { display: flex; gap: 1px; background: var(--surface); border-bottom: 1px solid var(--line); flex: none; }
-#viewswitch button {
-  border: 0; background: var(--surface); color: var(--fg-subtle);
-  padding: 6px 12px; font: inherit; font-size: 11px; cursor: pointer;
-  border-bottom: 2px solid transparent;
-}
-#viewswitch button:hover { color: var(--fg-muted); }
-#viewswitch button[aria-selected="true"] { color: var(--fg); background: var(--bg); border-bottom-color: var(--accent); }
 
 /* ---- graph canvas ---- */
 #graphwrap { flex: 1; min-height: 0; position: relative; background: var(--bg); }
@@ -324,7 +273,7 @@ button { font: inherit; }
   position: absolute; left: -3px; top: 0; bottom: 0; width: 7px;
   cursor: col-resize; z-index: 3; background: transparent;
 }
-#sidegrip:hover, #sidegrip.drag { background: var(--accent); opacity: .4; }
+#sidegrip.drag { background: var(--accent); opacity: .4; }
 #sidegrip:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 #sidehead {
   display: flex; align-items: center; gap: 8px;
@@ -338,89 +287,18 @@ button { font: inherit; }
 #sidehead .m { font-size: 9px; color: var(--fg-subtle); font-variant-numeric: tabular-nums; white-space: nowrap; }
 #sideterm { flex: 1; min-height: 0; padding: 6px 4px 4px; }
 #sideterm .xterm { height: 100%; }
+.terminal-host { height: 100%; min-height: 0; }
+#subagent-activity { flex: 1; min-height: 0; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.activity-entry { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg); padding: 8px; color: var(--fg-muted); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.activity-entry.tool { color: var(--fg-subtle); }
+.activity-tool { color: var(--accent); margin-right: 7px; }
+.activity-entry pre { margin: 7px 0 0; color: var(--fg-muted); font: inherit; white-space: pre-wrap; }
+.activity-empty, .activity-note { color: var(--fg-subtle); font-size: 10px; padding: 8px 10px; }
+.activity-note { border-top: 1px solid var(--line); background: var(--surface); flex: none; }
 </style>
 </head>
 <body>
-<header>
-  <span class="mark">WARDEN</span>
-  <span class="status"><span class="dot" id="dot"></span><span id="conn">connecting</span></span>
-  <span class="spacer"></span>
-  <span class="hint" id="summary"></span>
-</header>
-<main>
-  <nav id="rail">
-    <div class="rail-head">Workspaces <span class="count" id="wscount"></span></div>
-    <div id="wslist"></div>
-    <form id="newws">
-      <input id="wsname" placeholder="new workspace" autocomplete="off" spellcheck="false" aria-label="New workspace name" />
-      <button class="icon-btn" type="submit" title="Create workspace" aria-label="Create workspace">+</button>
-    </form>
-  </nav>
-  <section id="col">
-    <div id="viewswitch" role="tablist" aria-label="View">
-      <button id="vterm" role="tab" aria-selected="true">Terminals</button>
-      <button id="vgraph" role="tab" aria-selected="false">Agents</button>
-    </div>
-    <div id="termview" class="view on">
-      <div id="tabs" role="tablist" aria-label="Terminals"></div>
-      <div id="screen"></div>
-      <div id="status"><span class="path" id="statuspath"></span></div>
-    </div>
-    <div id="graphview" class="view">
-      <div id="graphmain">
-        <div id="graphwrap">
-          <canvas id="graph" tabindex="0" role="application" aria-label="Running agents in this workspace"></canvas>
-          <div id="graphbar">
-            <label class="toggle">
-              <input type="checkbox" id="subagents" />
-              show subagent sessions
-            </label>
-            <span class="win-note">nodes are live processes, scoped to this workspace</span>
-          </div>
-          <div id="graphinfo"></div>
-          <div id="gempty" hidden></div>
-          <div id="graphhint">drag to pan, scroll to zoom &middot; click a node, or arrow keys + enter</div>
-          <div id="detail" hidden>
-            <button class="x" id="detailx" aria-label="Close details">&times;</button>
-            <h2 id="d-title"></h2>
-            <div class="row"><span class="k">runtime</span><span class="v" id="d-runtime"></span></div>
-            <div class="row"><span class="k">directory</span><span class="v" id="d-dir"></span></div>
-            <div class="row"><span class="k">session</span><span class="v" id="d-id"></span></div>
-            <div class="row"><span class="k">started</span><span class="v" id="d-upd"></span></div>
-            <div class="row"><span class="k">children</span><span class="v" id="d-kids"></span></div>
-            <div class="rel" id="d-rel"></div>
-          </div>
-        </div>
-        <!--
-          The canvas shows the same agents but exposes nothing to a pointer or a
-          keyboard, and clicking it must stay read-only. This list is the real
-          control surface: selecting an agent docks the terminal it runs in.
-        -->
-        <ul id="agentlist" aria-label="Running agents"></ul>
-        <!--
-          Takes the agent list's slot while a terminal is docked. The xterm host
-          is re-parented in here rather than a second xterm being built, so the
-          shell keeps its scrollback and its socket across the move.
-        -->
-        <div id="sidepanel" hidden>
-          <div id="sidegrip" role="separator" aria-orientation="vertical" tabindex="0"
-               aria-label="Resize terminal panel" aria-valuemin="240" aria-valuenow="420"></div>
-          <div id="sidehead" tabindex="-1" title="Click to move focus off the terminal &mdash; Escape then closes this panel">
-            <span class="t" id="side-title"></span>
-            <span class="m" id="side-meta"></span>
-            <span class="spacer"></span>
-            <button class="icon-btn" id="side-close" title="Close terminal panel" aria-label="Close terminal panel">&times;</button>
-          </div>
-          <div id="sideterm"></div>
-        </div>
-      </div>
-      <div id="status"><span class="path" id="graphpath">select an agent to dock its terminal here</span></div>
-    </div>
-  </section>
-</main>
-<div id="toast" role="status" aria-live="polite"></div>
-<script src="/vendor/xterm.js"></script>
-<script src="/vendor/xterm-addon-fit.js"></script>
-<script type="module" src="/app.js"></script>
+<div id="root"></div>
+<script type="module" src="/main.jsx"></script>
 </body>
 </html>

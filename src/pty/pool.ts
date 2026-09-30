@@ -47,7 +47,10 @@ export interface Terminal {
   rows: number;
 }
 
-const SCROLLBACK_LIMIT = 200_000;
+// Keep enough raw output to restore a long-lived ordinary shell after a browser
+// reload. Full-screen TUIs such as OpenCode own their in-app scroll state, but
+// normal terminal programs should not silently lose history after ~2,000 lines.
+const SCROLLBACK_LIMIT = 2_000_000;
 
 export class PtyPool {
   private terms = new Map<string, Terminal>();

@@ -194,6 +194,25 @@ export class OpencodeAdapter {
         if (sid) this.emit({ kind: "permission.resolved", at, runtime: "opencode", sessionId: sid, permissionId: p.requestID, response: p.reply });
         return;
       }
+      case "question.asked": {
+        if (!sid) return;
+        const questions = Array.isArray(p.questions) ? p.questions : [];
+        this.emit({
+          kind: "input.requested",
+          at,
+          runtime: "opencode",
+          request: {
+            requestId: p.id ?? `${sid}:${at}`,
+            sessionId: sid,
+            summary: questions.map((question: any) => question?.question ?? question?.header ?? "input requested").join(" · ") || "input requested",
+          },
+        });
+        return;
+      }
+      case "question.replied": {
+        if (sid) this.emit({ kind: "input.resolved", at, runtime: "opencode", sessionId: sid, requestId: p.id ?? p.requestID ?? "" });
+        return;
+      }
       case "session.diff": {
         if (sid) this.emit({ kind: "diff", at, runtime: "opencode", sessionId: sid, diff: p.diff });
         return;
