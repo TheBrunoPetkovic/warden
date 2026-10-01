@@ -145,14 +145,14 @@ main { flex: 1; display: grid; min-height: 0; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   direction: rtl; text-align: left;
 }
-.ws .kill {
+.ws .workspace-menu-trigger {
   border: 0; background: none; color: var(--fg-subtle);
   cursor: pointer; padding: 2px 4px; line-height: 1;
   border-radius: 3px; font-size: 13px; opacity: 0;
 }
-.ws:hover .kill { opacity: 1; }
-.ws .kill svg { width: 13px; height: 13px; stroke: currentColor; }
-.ws .kill:hover { background: var(--red-3); color: var(--red-11); }
+.ws:hover .workspace-menu-trigger, .ws:focus-within .workspace-menu-trigger { opacity: 1; }
+.ws .workspace-menu-trigger svg { width: 15px; height: 15px; stroke: currentColor; }
+.ws .workspace-menu-trigger:hover { background: var(--raised); color: var(--fg); }
 /* A registry record whose directory is gone. It stays selectable-looking so the
    delete affordance is reachable, but it must not read as a working workspace. */
 .ws.gone { opacity: .55; }
@@ -194,6 +194,36 @@ button { font: inherit; }
 .icon-btn:hover { background: var(--gray-5); color: var(--fg); }
 .icon-btn:disabled { opacity: .4; cursor: default; }
 .icon-btn svg, #detail .x svg { width: 14px; height: 14px; stroke: currentColor; }
+
+/* ---- workspace actions ---- */
+.workspace-menu {
+  z-index: 70; min-width: 198px; padding: 4px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--fg-muted); box-shadow: 0 12px 32px #0008;
+}
+.workspace-menu-item {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px; border: 0; border-radius: 5px;
+  background: transparent; color: inherit; cursor: pointer;
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; outline: none;
+}
+.workspace-menu-item svg { width: 14px; height: 14px; stroke: currentColor; }
+.workspace-menu-item[data-highlighted] { background: var(--raised); color: var(--fg); }
+.workspace-menu-item[data-disabled] { opacity: .45; cursor: default; }
+.workspace-menu-item.danger { color: var(--danger); }
+.workspace-menu-item.danger[data-highlighted] { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.workspace-menu-separator { height: 1px; margin: 4px 2px; background: var(--line); }
+
+#rename-modal { position: fixed; z-index: 71; left: 50%; top: 50%; width: min(400px, calc(100% - 48px)); transform: translate(-50%, -50%); border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 28px 80px #0008; }
+#rename-modal form { padding: 18px; }
+#rename-modal header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+#rename-modal header h2 { margin: 0; flex: 1; font-size: 14px; font-weight: 600; }
+#rename-modal .ui-input { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); padding: 8px 9px; font: inherit; font-size: 12px; outline: none; }
+#rename-modal .ui-input:focus { border-color: var(--accent); }
+#rename-modal footer { display: flex; justify-content: flex-end; gap: 7px; margin-top: 16px; }
+.dialog-button { border: 1px solid var(--line); border-radius: 6px; background: var(--raised); color: var(--fg-muted); padding: 6px 10px; cursor: pointer; font: inherit; font-size: 11px; }
+.dialog-button:hover { color: var(--fg); }
+.dialog-button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
 
 /* ---- settings ---- */
 #settings-backdrop { position: fixed; inset: 0; z-index: 30; background: #0008; }

@@ -6,6 +6,7 @@
  * runtime happens to be plugged in.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { execFile } from "node:child_process";
 import { WorkspaceStore, HttpError, DEFAULT_TERM } from "../workspaces/store.ts";
 import type { PtyPool } from "../pty/pool.ts";
 
@@ -76,6 +77,16 @@ export async function handleWorkspaceRoutes(
       const killed = pool.killWorkspace(id);
       const r = await store.remove(id, { deleteFiles: true });
       return json(res, 200, { ...r, terminalsKilled: killed }), true;
+    }
+
+    const reveal = path.match(/^\/api\/workspaces\/([^/]+)\/reveal$/);
+    if (reveal && method === "POST") {
+      const ws = await store.get(decodeURIComponent(reveal[1]));
+      if (!ws) return json(res, 404, { error: "workspace not found" }), true;
+      if (store.missing(ws)) return json(res, 409, { error: `workspace directory is gone: ${ws.path}` }), true;
+      if (process.platform !== "darwin") return json(res, 501, { error: "Reveal in Finder is only available on macOS" }), true;
+      await new Promise<void>((resolve, reject) => execFile("open", [ws.path], error => error ? reject(error) : resolve()));
+      return json(res, 200, { ok: true }), true;
     }
 
     // --- terminals --------------------------------------------------

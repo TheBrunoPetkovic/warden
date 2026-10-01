@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plus, Settings, Trash2, X } from "lucide-react";
+import { Copy, Ellipsis, FolderOpen, Pencil, Plus, Settings, Terminal, Trash2, X } from "lucide-react";
 import { AgentGraph } from "./AgentGraph.jsx";
 import { TerminalPane } from "./TerminalPane.jsx";
 import { Button } from "./components/ui/button.jsx";
 import { Dialog, DialogClose, DialogContent, DialogOverlay, DialogTitle } from "./components/ui/dialog.jsx";
 import { Input } from "./components/ui/input.jsx";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/ui/tooltip.jsx";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu.jsx";
 
 const api = async (path, options = {}) => {
   const response = await fetch(path, {
@@ -45,15 +46,27 @@ function SettingsModal({ appearance, onChange, onClose }) {
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogOverlay id="settings-backdrop"/><DialogContent id="settings-modal"><aside id="settings-nav"><div className="settings-nav-label">Settings</div><Button className="settings-nav-item active" type="button">Appearance</Button></aside><div id="settings-content"><header className="settings-header"><DialogTitle id="settings-title">Appearance</DialogTitle><DialogClose asChild><Button className="icon-btn" type="button" aria-label="Close settings"><X aria-hidden="true"/></Button></DialogClose></header><section className="settings-group"><div className="settings-group-title">Theme</div><div className="theme-options">{[["dark", "Dark"], ["light", "Light"], ["system", "System"]].map(([id, label]) => <Button key={id} type="button" className={`theme-option ${appearance.theme === id ? "selected" : ""}`} onClick={() => onChange({ ...appearance, theme: id })}><span className={`theme-preview ${id}`}/><span>{label}</span></Button>)}</div></section><section className="settings-group"><div className="settings-group-title">Color Scheme</div><div className="scheme-options">{SCHEMES.map(([id, label, color]) => <Button key={id} type="button" className={`scheme-option ${appearance.scheme === id ? "selected" : ""}`} onClick={() => onChange({ ...appearance, scheme: id })}><i style={{ "--swatch": color }}/><span>{label}</span>{appearance.scheme === id && <b>✓</b>}</Button>)}</div></section></div></DialogContent></Dialog>;
 }
 
-function WorkspaceRail({ workspaces, activeId, onOpen, onCreate, onDelete }) {
+function RenameWorkspaceDialog({ workspace, onClose, onRename }) {
+  const [name, setName] = useState(workspace.name);
+  const submit = async event => {
+    event.preventDefault();
+    if (!name.trim() || name.trim() === workspace.name) return onClose();
+    await onRename(workspace, name.trim());
+    onClose();
+  };
+  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogOverlay id="settings-backdrop"/><DialogContent id="rename-modal"><form onSubmit={submit}><header><DialogTitle>Rename workspace</DialogTitle><DialogClose asChild><Button className="icon-btn" type="button" aria-label="Close rename dialog"><X aria-hidden="true"/></Button></DialogClose></header><Input value={name} onChange={event => setName(event.target.value)} aria-label="Workspace name" autoFocus/><footer><Button type="button" className="dialog-button" onClick={onClose}>Cancel</Button><Button type="submit" className="dialog-button primary">Save</Button></footer></form></DialogContent></Dialog>;
+}
+
+function WorkspaceRail({ workspaces, activeId, onOpen, onNewTerminal, onCreate, onRename, onReveal, onCopy, onDelete }) {
   const [name, setName] = useState("");
+  const [menuFor, setMenuFor] = useState(null);
   const submit = async event => {
     event.preventDefault();
     if (!name.trim()) return;
     await onCreate(name.trim());
     setName("");
   };
-  return <nav id="rail"><div className="rail-head">Workspaces <span className="count">{workspaces.length || ""}</span></div><div id="wslist">{workspaces.map(workspace => <div key={workspace.id} className={`ws${workspace.id === activeId ? " sel" : ""}${workspace.missing ? " gone" : ""}`} role="button" tabIndex="0" onClick={() => onOpen(workspace)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(workspace); } }}><div className="body"><div className="name">{workspace.name}</div><div className="path">{workspace.path}</div></div><Button className="kill" type="button" onClick={event => { event.stopPropagation(); onDelete(workspace); }} title={workspace.missing ? `Forget ${workspace.name}` : `Delete ${workspace.name}`} aria-label={`Delete ${workspace.name}`}><Trash2 aria-hidden="true"/></Button></div>)}</div><form id="newws" onSubmit={submit}><Input value={name} onChange={event => setName(event.target.value)} placeholder="new workspace" autoComplete="off" spellCheck="false" aria-label="New workspace name"/><Button className="icon-btn" type="submit" title="Create workspace" aria-label="Create workspace"><Plus aria-hidden="true"/></Button></form></nav>;
+  return <nav id="rail"><div className="rail-head">Workspaces <span className="count">{workspaces.length || ""}</span></div><div id="wslist">{workspaces.map(workspace => <div key={workspace.id} className={`ws${workspace.id === activeId ? " sel" : ""}${workspace.missing ? " gone" : ""}`} role="button" tabIndex="0" onClick={() => onOpen(workspace)} onContextMenu={event => { event.preventDefault(); setMenuFor(workspace.id); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(workspace); } }}><div className="body"><div className="name">{workspace.name}</div><div className="path">{workspace.path}</div></div><DropdownMenu open={menuFor === workspace.id} onOpenChange={open => setMenuFor(open ? workspace.id : null)}><DropdownMenuTrigger asChild><Button className="workspace-menu-trigger" type="button" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} title={`Workspace actions for ${workspace.name}`} aria-label={`Workspace actions for ${workspace.name}`}><Ellipsis aria-hidden="true"/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onOpen(workspace)} disabled={workspace.missing}><Terminal aria-hidden="true"/>Open terminal</DropdownMenuItem><DropdownMenuItem onSelect={() => onNewTerminal(workspace)} disabled={workspace.missing}><Plus aria-hidden="true"/>New terminal</DropdownMenuItem><DropdownMenuSeparator className="workspace-menu-separator"/><DropdownMenuItem onSelect={() => onRename(workspace)}><Pencil aria-hidden="true"/>Rename workspace</DropdownMenuItem><DropdownMenuItem onSelect={() => onReveal(workspace)} disabled={workspace.missing}><FolderOpen aria-hidden="true"/>Reveal in Finder</DropdownMenuItem><DropdownMenuItem onSelect={() => onCopy(workspace)}><Copy aria-hidden="true"/>Copy workspace path</DropdownMenuItem><DropdownMenuSeparator className="workspace-menu-separator"/><DropdownMenuItem className="danger" onSelect={() => onDelete(workspace)}><Trash2 aria-hidden="true"/>{workspace.missing ? "Forget workspace" : "Delete workspace"}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>)}</div><form id="newws" onSubmit={submit}><Input value={name} onChange={event => setName(event.target.value)} placeholder="new workspace" autoComplete="off" spellCheck="false" aria-label="New workspace name"/><Button className="icon-btn" type="submit" title="Create workspace" aria-label="Create workspace"><Plus aria-hidden="true"/></Button></form></nav>;
 }
 
 function ResizeGrip({ width, setWidth }) {
@@ -125,6 +138,7 @@ export function App() {
   });
   const [toast, setToast] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState(null);
   const [appearance, setAppearance] = useState(readAppearance);
   const terminals = termsByWorkspace[activeWs] ?? [];
   const notify = useCallback(message => {
@@ -168,11 +182,11 @@ export function App() {
       } catch (error) { notify(error.message); }
     })();
   }, [loadWorkspaces, notify, syncTerminals]);
-  const openWorkspace = useCallback(async workspace => {
+  const openWorkspace = useCallback(async (workspace, { fresh = false } = {}) => {
     if (workspace.missing) return notify(`"${workspace.name}" — its directory no longer exists.`);
     try {
       setActiveWs(workspace.id);
-      const existing = (await syncTerminals(workspace.id)).find(terminal => !terminal.dead);
+      const existing = fresh ? null : (await syncTerminals(workspace.id)).find(terminal => !terminal.dead);
       if (existing) {
         setSide({ kind: "terminal", termId: existing.id, node: { title: `${workspace.name} terminal`, workspaceTerminal: true } });
         return;
@@ -183,8 +197,22 @@ export function App() {
       setSide({ kind: "terminal", termId: next.id, node: { title: `${workspace.name} terminal`, workspaceTerminal: true } });
     } catch (error) { notify(error.message); }
   }, [notify, syncTerminals]);
+  const openNewTerminal = useCallback(workspace => openWorkspace(workspace, { fresh: true }), [openWorkspace]);
   const createWorkspace = async name => {
     try { const workspace = await api("/api/workspaces", { method: "POST", body: { name } }); await loadWorkspaces(); await openWorkspace(workspace); } catch (error) { notify(error.message); }
+  };
+  const renameWorkspace = async (workspace, name) => {
+    try { await api(`/api/workspaces/${workspace.id}`, { method: "PATCH", body: { name } }); await loadWorkspaces(); } catch (error) { notify(error.message); }
+  };
+  const revealWorkspace = async workspace => {
+    try { await api(`/api/workspaces/${workspace.id}/reveal`, { method: "POST" }); } catch (error) { notify(error.message); }
+  };
+  const copyWorkspacePath = async workspace => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard is unavailable");
+      await navigator.clipboard.writeText(workspace.path);
+      notify("Workspace path copied");
+    } catch (error) { notify(`copy path: ${error.message}`); }
   };
   const deleteWorkspace = async workspace => {
     if (!workspace.missing && !window.confirm(`Delete workspace "${workspace.name}"? Its directory and running terminals are removed.`)) return;
@@ -212,5 +240,5 @@ export function App() {
     ? <SubagentActivity node={side.node} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onToast={notify}/>
     : sideTerminal ? <SideTerminal node={side.node} terminal={sideTerminal} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onExit={markExited} onToast={notify} appearance={appearance}/>
       : null;
-  return <TooltipProvider delayDuration={250}><div id="windowbar"><Tooltip><TooltipTrigger asChild><Button id="settings-button" type="button" aria-label="Settings" onClick={() => setSettingsOpen(true)}><Settings aria-hidden="true"/></Button></TooltipTrigger><TooltipContent>Settings</TooltipContent></Tooltip></div><main style={{ gridTemplateColumns: `${railWidth}px 1px minmax(0, 1fr)` }}><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace}/><RailResizeGrip width={railWidth} setWidth={setRailWidth}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main>{settingsOpen && <SettingsModal appearance={appearance} onChange={setAppearance} onClose={() => setSettingsOpen(false)}/>}<div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></TooltipProvider>;
+  return <TooltipProvider delayDuration={250}><div id="windowbar"><Tooltip><TooltipTrigger asChild><Button id="settings-button" type="button" aria-label="Settings" onClick={() => setSettingsOpen(true)}><Settings aria-hidden="true"/></Button></TooltipTrigger><TooltipContent>Settings</TooltipContent></Tooltip></div><main style={{ gridTemplateColumns: `${railWidth}px 1px minmax(0, 1fr)` }}><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onNewTerminal={openNewTerminal} onCreate={createWorkspace} onRename={setRenameTarget} onReveal={revealWorkspace} onCopy={copyWorkspacePath} onDelete={deleteWorkspace}/><RailResizeGrip width={railWidth} setWidth={setRailWidth}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main>{settingsOpen && <SettingsModal appearance={appearance} onChange={setAppearance} onClose={() => setSettingsOpen(false)}/>} {renameTarget && <RenameWorkspaceDialog workspace={renameTarget} onClose={() => setRenameTarget(null)} onRename={renameWorkspace}/>}<div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></TooltipProvider>;
 }
