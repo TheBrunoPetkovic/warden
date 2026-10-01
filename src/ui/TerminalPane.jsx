@@ -3,7 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 
 /** One browser xterm attached to one Warden PTY. */
-export function TerminalPane({ terminal, startupInput, onExit, onError, appearance }) {
+export function TerminalPane({ terminal, startupInput, onExit, onError, appearance, settings }) {
   const host = useRef(null);
   const startup = useRef(startupInput);
 
@@ -16,10 +16,12 @@ export function TerminalPane({ terminal, startupInput, onExit, onError, appearan
     const term = new Terminal({
       convertEol: true,
       cursorBlink: true,
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      fontSize: 12.5,
+      fontFamily: fontFor(settings?.fontFamily),
+      fontSize: settings?.fontSize ?? 13,
       lineHeight: 1.2,
-      scrollback: 50000,
+      scrollback: settings?.scrollback ?? 50000,
+      cursorStyle: settings?.cursorStyle ?? "bar",
+      cursorBlink: settings?.cursorBlink ?? true,
       allowProposedApi: true,
       theme: {
         background: css("--bg", "#111318"),
@@ -71,6 +73,22 @@ export function TerminalPane({ terminal, startupInput, onExit, onError, appearan
         socket.send(JSON.stringify({ type: "input", data }));
       }
     });
+    term.attachCustomKeyEventHandler(event => {
+      if (event.type !== "keydown") return true;
+      const key = event.key.toLowerCase();
+      const macos = settings?.keybinding === "macos" && event.metaKey;
+      const vscode = settings?.keybinding === "vscode" && event.ctrlKey && event.shiftKey;
+      if ((macos || vscode) && key === "c" && term.hasSelection()) {
+        void navigator.clipboard?.writeText?.(term.getSelection());
+        return false;
+      }
+      if ((macos || vscode) && key === "v") {
+        const readClipboard = navigator.clipboard?.readText;
+        if (readClipboard) void readClipboard.call(navigator.clipboard).then(text => term.paste(text)).catch(() => {});
+        return false;
+      }
+      return true;
+    });
     const resize = () => {
       if (!host.current) return;
       fit.fit();
@@ -90,11 +108,17 @@ export function TerminalPane({ terminal, startupInput, onExit, onError, appearan
       socket.close();
       term.dispose();
     };
-  }, [terminal?.id, onError, onExit, appearance?.theme, appearance?.scheme]);
+  }, [terminal?.id, onError, onExit, appearance?.theme, appearance?.scheme, settings?.fontFamily, settings?.fontSize, settings?.scrollback, settings?.cursorStyle, settings?.cursorBlink, settings?.keybinding]);
 
   return <div className="terminal-host" ref={host} />;
 }
 
 function css(variable, fallback) {
   return getComputedStyle(document.documentElement).getPropertyValue(variable).trim() || fallback;
+}
+
+function fontFor(font) {
+  if (font === "menlo") return "Menlo, ui-monospace, monospace";
+  if (font === "jetbrains") return "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace";
+  return "ui-monospace, SFMono-Regular, Menlo, monospace";
 }

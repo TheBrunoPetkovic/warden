@@ -53,7 +53,7 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect, onContro
   const ref = useRef(null);
   const view = useRef({ x: 0, y: 0, k: 1, fitted: false });
   const pointer = useRef(null);
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  const reducedMotion = (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false) || document.documentElement.classList.contains("reduce-motion");
   const screen = point => ({ x: point.x * view.current.k + view.current.x, y: point.y * view.current.k + view.current.y });
   const anchor = (node, right) => ({ ...screen(node), x: screen(node).x + (right ? node.width / 2 : -node.width / 2) });
 
@@ -190,7 +190,7 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect, onContro
   />;
 }
 
-export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePanel }) {
+export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePanel, autoOpen, hideCompleted, refreshSeconds, onAgentNotification }) {
   const [data, setData] = useState({ workspace: null, agents: [], subagents: [] });
   const [showSubagents, setShowSubagents] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -200,6 +200,8 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
   const [graphControls, setGraphControls] = useState(null);
   const [seen, setSeen] = useState(() => new Set(JSON.parse(localStorage.getItem("warden.seen-agent-completions") ?? "[]")));
   const previous = useRef(new Map());
+  const autoOpened = useRef(new Set());
+  const autoOpenSeeded = useRef(false);
 
   const markSeen = useCallback(node => {
     if (node.state !== "complete" || seen.has(node.id)) return;
@@ -221,17 +223,17 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
         if (!cancelled) { setData(next); setError(""); }
       } catch (cause) { if (!cancelled) setError(cause.message); }
     };
-    void load(); const poll = setInterval(load, 2000);
+    void load(); const poll = setInterval(load, Math.max(1, refreshSeconds ?? 2) * 1000);
     return () => { cancelled = true; clearInterval(poll); };
-  }, [workspaceId]);
+  }, [workspaceId, refreshSeconds]);
 
   const nodes = useMemo(() => {
     const decorate = node => ({ ...node, title: node.title || `${node.runtime} agent`, visualState: node.state === "complete" ? (seen.has(node.id) ? "complete-read" : "complete-unread") : (node.state ?? (node.live ? "working" : "idle")) });
     const roots = data.agents.map(agent => decorate({ ...agent, id: agent.sessionId ?? `pid:${agent.pid}`, live: true, sessionId: agent.sessionId }));
     const ids = new Set(roots.map(node => node.id));
     if (showSubagents) data.subagents.forEach(session => { if (!ids.has(session.id)) roots.push(decorate({ ...session, id: session.id, sessionId: session.id, live: false })); });
-    return arrange(roots, 1100, 680);
-  }, [data, seen, showSubagents]);
+    return arrange(hideCompleted ? roots.filter(node => node.state !== "complete") : roots, 1100, 680);
+  }, [data, hideCompleted, seen, showSubagents]);
   const edges = useMemo(() => {
     const ids = new Map(nodes.map(node => [node.id, node]));
     return nodes.filter(node => node.parentId && ids.has(node.parentId)).map(node => ({ from: ids.get(node.parentId), to: node }));
@@ -246,11 +248,25 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
         if (!node.parentId) continue;
         if (!before) started.push({ from: node.parentId, to: node.id, direction: "down", at: performance.now() });
         else if (node.updated && node.updated !== before.updated) started.push({ from: node.parentId, to: node.id, direction: "up", at: performance.now() });
+        if (before && node.visualState !== before.visualState && ["needs-input", "complete-unread", "failed"].includes(node.visualState)) onAgentNotification?.(node);
       }
     }
     previous.current = next;
     if (started.length) setPulses(current => [...current.filter(pulse => performance.now() - pulse.at < 1200), ...started]);
-  }, [nodes]);
+  }, [nodes, onAgentNotification]);
+
+  useEffect(() => {
+    if (!autoOpen) return;
+    if (!autoOpenSeeded.current) {
+      nodes.forEach(node => autoOpened.current.add(node.id));
+      autoOpenSeeded.current = true;
+      return;
+    }
+    const next = nodes.find(node => node.live && node.terminalId && !autoOpened.current.has(node.id));
+    if (!next) return;
+    autoOpened.current.add(next.id);
+    onOpenTerminal(next);
+  }, [autoOpen, nodes, onOpenTerminal]);
 
   const activate = node => {
     markSeen(node);

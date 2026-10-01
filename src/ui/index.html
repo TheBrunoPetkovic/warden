@@ -48,6 +48,7 @@
 :root[data-theme="dark"][data-scheme="material"] { --bg:#263238; --surface:#1e272c; --raised:#37474f; --line:#4b626b; --line-soft:#35464d; --fg:#eeffff; --fg-muted:#b0bec5; --fg-subtle:#607d8b; --accent:#80cbc4; --accent-fg:#baf1ec; --danger:#ff5370; --ok:#c3e88d; }
 :root[data-theme="dark"][data-scheme="cyberpunk"] { --bg:#170b24; --surface:#100718; --raised:#29133b; --line:#56296b; --line-soft:#3d1c53; --fg:#f7e9ff; --fg-muted:#d6b9e6; --fg-subtle:#9066a3; --accent:#f92aad; --accent-fg:#ff9bdb; --danger:#ff4f8b; --ok:#37ebf3; }
 :root[data-theme="light"] { --bg:#f7f8fb; --surface:#ffffff; --raised:#eef1f7; --line:#d8dde8; --line-soft:#e6e9f0; --fg:#1e2636; --fg-muted:#475569; --fg-subtle:#7c879a; --accent:#2563eb; --accent-fg:#1d4ed8; --danger:#dc2626; --ok:#16a34a; }
+:root[data-density="compact"] { --pad: 7px; }
 
 * { box-sizing: border-box; }
 
@@ -232,7 +233,7 @@ button { font: inherit; }
 #settings-nav { padding: 20px 10px; border-right: 1px solid var(--line); background: var(--raised); }
 .settings-nav-label, .settings-group-title { color: var(--fg-subtle); font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
 .settings-nav-label { padding: 0 10px 12px; }
-.settings-nav-item { width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-muted); text-align: left; cursor: default; font: inherit; font-size: 12px; }
+.settings-nav-item { width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-muted); text-align: left; cursor: pointer; font: inherit; font-size: 12px; }
 .settings-nav-item.active { background: var(--surface); color: var(--fg); box-shadow: inset 2px 0 var(--accent); }
 #settings-content { min-width: 0; overflow: auto; padding: 0 24px 28px; }
 .settings-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 0 18px; border-bottom: 1px solid var(--line-soft); }
@@ -248,6 +249,22 @@ button { font: inherit; }
 .scheme-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .scheme-option { min-height: 42px; padding: 8px 10px; border-radius: 7px; display: flex; align-items: center; gap: 9px; text-align: left; font-size: 11px; }
 .scheme-option i { width: 14px; height: 14px; flex: none; border-radius: 50%; background: var(--swatch); }.scheme-option b { margin-left: auto; color: var(--accent); font-size: 12px; }
+.setting-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.setting-choices button { border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--fg-muted); padding: 5px 8px; cursor: pointer; font: inherit; font-size: 10px; }
+.setting-choices button:hover, .setting-choices button.selected { border-color: var(--accent); color: var(--fg); }
+.setting-choices button.selected { box-shadow: 0 0 0 1px var(--accent); }
+.setting-field { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 10px; color: var(--fg-muted); font-size: 11px; }
+.setting-row { display: flex; align-items: center; gap: 9px; color: var(--fg-muted); font-size: 11px; }
+.setting-color { width: 30px; height: 24px; padding: 2px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); }
+.reset-accent { border: 0; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-size: 10px; }
+.setting-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid var(--line-soft); color: var(--fg-muted); font-size: 11px; }
+.setting-toggle + .setting-toggle { margin-top: 0; }
+.setting-toggle small, .setting-text-input small { display: block; margin-top: 2px; color: var(--fg-subtle); font-size: 9px; }
+.switch { width: 30px; height: 17px; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); cursor: pointer; }
+.switch span { display: block; width: 11px; height: 11px; border-radius: 50%; background: var(--fg-subtle); transition: transform .15s ease; }
+.switch.on { border-color: var(--accent); background: var(--accent); }.switch.on span { transform: translateX(13px); background: var(--bg); }
+.setting-text-input { display: block; color: var(--fg-muted); font-size: 11px; }.setting-text-input > span { display: block; margin-bottom: 6px; }
+.setting-text-input .ui-input { width: 100%; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); padding: 7px 8px; font: inherit; font-size: 11px; outline: none; }.setting-text-input .ui-input:focus { border-color: var(--accent); }
 
 /* toast: transient errors only; nothing here should be a permanent banner */
 #toast {
@@ -331,6 +348,9 @@ button { font: inherit; }
 #gempty[hidden] { display: none; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+:root.reduce-motion * { transition: none !important; animation: none !important; }
+:root[data-density="compact"] .ws { padding-top: 5px; padding-bottom: 5px; }
+:root[data-density="compact"] #sidehead { padding-top: 5px; padding-bottom: 5px; }
 
 /* The agent list is a real sidebar, not a screen-reader accessory. It used to be
    a 1px clipped element that only became visible on :focus-visible, which meant

@@ -7,6 +7,8 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import { WorkspaceStore, HttpError, DEFAULT_TERM } from "../workspaces/store.ts";
 import type { PtyPool } from "../pty/pool.ts";
 
@@ -53,8 +55,8 @@ export async function handleWorkspaceRoutes(
     }
 
     if (path === "/api/workspaces" && method === "POST") {
-      const { name, path: dir } = await readBody(req);
-      const ws = await store.create(name, dir);
+      const { name, path: dir, basePath } = await readBody(req);
+      const ws = await store.create(name, dir, basePath);
       return json(res, 201, ws), true;
     }
 
@@ -93,7 +95,7 @@ export async function handleWorkspaceRoutes(
     if (path === "/api/terminals" && method === "GET") return json(res, 200, pool.list()), true;
 
     if (path === "/api/terminals" && method === "POST") {
-      const { workspaceId, cols, rows } = await readBody(req);
+      const { workspaceId, cols, rows, shell } = await readBody(req);
       const ws = await store.get(workspaceId);
       if (!ws) return json(res, 404, { error: "workspace not found" }), true;
       // Guarded here rather than left to node-pty: a record whose directory was
@@ -102,14 +104,16 @@ export async function handleWorkspaceRoutes(
       if (store.missing(ws)) {
         return json(res, 409, { error: `workspace directory is gone: ${ws.path}` }), true;
       }
+      const selectedShell = typeof shell === "string" ? shell : DEFAULT_TERM;
+      if (!isAbsolute(selectedShell) || !existsSync(selectedShell)) throw new HttpError(400, `shell is unavailable: ${selectedShell}`);
       const term = await pool.spawn({
         workspaceId,
         cwd: ws.path,
-        shell: DEFAULT_TERM,
+        shell: selectedShell,
         cols,
         rows,
       });
-      return json(res, 201, { id: term.id, workspaceId, path: ws.path, shell: DEFAULT_TERM }), true;
+      return json(res, 201, { id: term.id, workspaceId, path: ws.path, shell: selectedShell }), true;
     }
 
     const term = path.match(/^\/api\/terminals\/([^/]+)$/);
