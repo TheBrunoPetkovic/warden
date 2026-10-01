@@ -48,7 +48,7 @@ export async function handleWorkspaceRoutes(
       return json(res, 200, all.map(w => ({
         ...w,
         missing: store.missing(w),
-        terminals: pool.forWorkspace(w.id).length,
+        terminals: pool.forWorkspace(w.id).filter(terminal => terminal.alive).length,
       }))), true;
     }
 

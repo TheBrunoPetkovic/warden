@@ -66,7 +66,7 @@ function WorkspaceRail({ workspaces, activeId, onOpen, onNewTerminal, onCreate, 
     await onCreate(name.trim());
     setName("");
   };
-  return <nav id="rail"><div className="rail-head">Workspaces <span className="count">{workspaces.length || ""}</span></div><div id="wslist">{workspaces.map(workspace => <div key={workspace.id} className={`ws${workspace.id === activeId ? " sel" : ""}${workspace.missing ? " gone" : ""}`} role="button" tabIndex="0" onClick={() => onOpen(workspace)} onContextMenu={event => { event.preventDefault(); setMenuFor(workspace.id); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(workspace); } }}><div className="body"><div className="name">{workspace.name}</div><div className="path">{workspace.path}</div></div><DropdownMenu open={menuFor === workspace.id} onOpenChange={open => setMenuFor(open ? workspace.id : null)}><DropdownMenuTrigger asChild><Button className="workspace-menu-trigger" type="button" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} title={`Workspace actions for ${workspace.name}`} aria-label={`Workspace actions for ${workspace.name}`}><Ellipsis aria-hidden="true"/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onOpen(workspace)} disabled={workspace.missing}><Terminal aria-hidden="true"/>Open terminal</DropdownMenuItem><DropdownMenuItem onSelect={() => onNewTerminal(workspace)} disabled={workspace.missing}><Plus aria-hidden="true"/>New terminal</DropdownMenuItem><DropdownMenuSeparator className="workspace-menu-separator"/><DropdownMenuItem onSelect={() => onRename(workspace)}><Pencil aria-hidden="true"/>Rename workspace</DropdownMenuItem><DropdownMenuItem onSelect={() => onReveal(workspace)} disabled={workspace.missing}><FolderOpen aria-hidden="true"/>Reveal in Finder</DropdownMenuItem><DropdownMenuItem onSelect={() => onCopy(workspace)}><Copy aria-hidden="true"/>Copy workspace path</DropdownMenuItem><DropdownMenuSeparator className="workspace-menu-separator"/><DropdownMenuItem className="danger" onSelect={() => onDelete(workspace)}><Trash2 aria-hidden="true"/>{workspace.missing ? "Forget workspace" : "Delete workspace"}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>)}</div><form id="newws" onSubmit={submit}><Input value={name} onChange={event => setName(event.target.value)} placeholder="new workspace" autoComplete="off" spellCheck="false" aria-label="New workspace name"/><Button className="icon-btn" type="submit" title="Create workspace" aria-label="Create workspace"><Plus aria-hidden="true"/></Button></form></nav>;
+  return <nav id="rail"><div className="rail-head">Workspaces <span className="count">{workspaces.length || ""}</span></div><div id="wslist">{workspaces.map(workspace => <div key={workspace.id} className={`ws${workspace.id === activeId ? " sel" : ""}${workspace.missing ? " gone" : ""}`} role="button" tabIndex="0" onClick={() => onOpen(workspace)} onContextMenu={event => { event.preventDefault(); setMenuFor(workspace.id); }} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(workspace); } }}><div className="body"><div className="name">{workspace.name}{workspace.terminals > 0 && <span className="term-count" title={`${workspace.terminals} active terminals`}>{workspace.terminals}</span>}</div><div className="path">{workspace.path}</div></div><DropdownMenu open={menuFor === workspace.id} onOpenChange={open => setMenuFor(open ? workspace.id : null)}><DropdownMenuTrigger asChild><Button className="workspace-menu-trigger" type="button" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} title={`Workspace actions for ${workspace.name}`} aria-label={`Workspace actions for ${workspace.name}`}><Ellipsis aria-hidden="true"/></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onOpen(workspace)} disabled={workspace.missing}><Terminal aria-hidden="true"/>Open terminal</DropdownMenuItem><DropdownMenuItem onSelect={() => onNewTerminal(workspace)} disabled={workspace.missing}><Plus aria-hidden="true"/>New terminal</DropdownMenuItem><DropdownMenuSeparator className="workspace-menu-separator"/><DropdownMenuItem onSelect={() => onRename(workspace)}><Pencil aria-hidden="true"/>Rename workspace</DropdownMenuItem><DropdownMenuItem onSelect={() => onReveal(workspace)} disabled={workspace.missing}><FolderOpen aria-hidden="true"/>Reveal in Finder</DropdownMenuItem><DropdownMenuItem onSelect={() => onCopy(workspace)}><Copy aria-hidden="true"/>Copy workspace path</DropdownMenuItem><DropdownMenuSeparator className="workspace-menu-separator"/><DropdownMenuItem className="danger" onSelect={() => onDelete(workspace)}><Trash2 aria-hidden="true"/>{workspace.missing ? "Forget workspace" : "Delete workspace"}</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>)}</div><form id="newws" onSubmit={submit}><Input value={name} onChange={event => setName(event.target.value)} placeholder="new workspace" autoComplete="off" spellCheck="false" aria-label="New workspace name"/><Button className="icon-btn" type="submit" title="Create workspace" aria-label="Create workspace"><Plus aria-hidden="true"/></Button></form></nav>;
 }
 
 function ResizeGrip({ width, setWidth }) {
@@ -103,9 +103,13 @@ function RailResizeGrip({ width, setWidth }) {
   return <div id="railgrip" className={resizing ? "drag" : ""} role="separator" aria-orientation="vertical" tabIndex="0" aria-label="Resize workspace sidebar" aria-valuemin="180" aria-valuenow={width} onPointerDown={startResize} onPointerMove={resize} onPointerUp={stopResize} onPointerCancel={stopResize} onKeyDown={event => { const delta = event.key === "ArrowLeft" ? -24 : event.key === "ArrowRight" ? 24 : 0; if (delta) { event.preventDefault(); setWidth(clamp(width + delta)); } }}/>;
 }
 
-function SideTerminal({ node, terminal, width, setWidth, onClose, onExit, onToast, appearance }) {
+function WorkspaceTerminalList({ terminals, selectedId, onSelect, onNewTerminal }) {
+  return <div id="terminal-switcher"><header><span>Terminals</span><Button type="button" className="new-terminal" onClick={onNewTerminal} title="New terminal" aria-label="New terminal"><Plus aria-hidden="true"/></Button></header><div className="terminal-list">{terminals.map(item => <Button type="button" key={item.id} className={`terminal-list-item ${item.id === selectedId ? "selected" : ""}`} onClick={() => onSelect(item)}><span className={`terminal-state ${item.dead ? "exited" : "active"}`}/><span className="terminal-label">terminal · {item.id}</span><span className="terminal-meta">{item.dead ? "exited" : "active"}</span></Button>)}</div></div>;
+}
+
+function SideTerminal({ node, terminal, terminals, workspaceName, width, setWidth, onClose, onExit, onToast, onSelectTerminal, onNewTerminal, appearance }) {
   const meta = node?.workspaceTerminal ? `terminal · ${terminal.id}` : node?.live ? `${node.runtime} · pid ${node.pid}` : `${node?.runtime ?? "terminal"} subagent · ${terminal.id}`;
-  return <div id="sidepanel" style={{ "--side-w": `${width}px` }}><ResizeGrip width={width} setWidth={setWidth}/><div id="sidehead" tabIndex="-1"><span className="t">{node?.title ?? terminal.name ?? terminal.id}</span><span className="m">{meta}</span><span className="spacer"/><Button className="icon-btn" type="button" onClick={onClose} title="Close terminal panel" aria-label="Close terminal panel"><X aria-hidden="true"/></Button></div><div id="sideterm"><TerminalPane terminal={terminal} startupInput={terminal.startupInput} onExit={onExit} onError={onToast} appearance={appearance}/></div></div>;
+  return <div id="sidepanel" style={{ "--side-w": `${width}px` }}><ResizeGrip width={width} setWidth={setWidth}/><div id="sidehead" tabIndex="-1"><span className="t">{node?.title ?? `${workspaceName} terminal`}</span><span className="m">{meta}</span><span className="spacer"/><Button className="icon-btn" type="button" onClick={onClose} title="Close terminal panel" aria-label="Close terminal panel"><X aria-hidden="true"/></Button></div><WorkspaceTerminalList terminals={terminals} selectedId={terminal.id} onSelect={onSelectTerminal} onNewTerminal={onNewTerminal}/><div id="sideterm"><TerminalPane terminal={terminal} startupInput={terminal.startupInput} onExit={onExit} onError={onToast} appearance={appearance}/></div></div>;
 }
 
 function SubagentActivity({ node, width, setWidth, onClose, onToast }) {
@@ -194,9 +198,10 @@ export function App() {
       const terminal = await api("/api/terminals", { method: "POST", body: { workspaceId: workspace.id } });
       const next = { ...terminal, dead: false };
       setTermsByWorkspace(current => ({ ...current, [workspace.id]: [...(current[workspace.id] ?? []), next] }));
+      void loadWorkspaces();
       setSide({ kind: "terminal", termId: next.id, node: { title: `${workspace.name} terminal`, workspaceTerminal: true } });
     } catch (error) { notify(error.message); }
-  }, [notify, syncTerminals]);
+  }, [loadWorkspaces, notify, syncTerminals]);
   const openNewTerminal = useCallback(workspace => openWorkspace(workspace, { fresh: true }), [openWorkspace]);
   const createWorkspace = async name => {
     try { const workspace = await api("/api/workspaces", { method: "POST", body: { name } }); await loadWorkspaces(); await openWorkspace(workspace); } catch (error) { notify(error.message); }
@@ -227,7 +232,8 @@ export function App() {
       ...current,
       [activeWs]: (current[activeWs] ?? []).map(terminal => terminal.id === id ? { ...terminal, dead: true } : terminal),
     }));
-  }, [activeWs]);
+    void loadWorkspaces();
+  }, [activeWs, loadWorkspaces]);
   const openRootTerminal = node => {
     const terminal = terminals.find(item => item.id === node.terminalId);
     if (!terminal) return notify(`terminal ${node.terminalId} is no longer in this workspace`);
@@ -235,10 +241,15 @@ export function App() {
     setSide({ kind: "terminal", termId: terminal.id, node });
   };
   const openSubagent = node => { setSide({ kind: "subagent", node }); };
+  const selectWorkspaceTerminal = terminal => {
+    const workspace = workspaces.find(item => item.id === activeWs);
+    setSide({ kind: "terminal", termId: terminal.id, node: { title: `${workspace?.name ?? "workspace"} terminal`, workspaceTerminal: true } });
+  };
+  const activeWorkspace = workspaces.find(workspace => workspace.id === activeWs);
   const sideTerminal = side?.kind === "terminal" ? terminals.find(terminal => terminal.id === side.termId) : null;
   const sidePanel = side?.kind === "subagent"
     ? <SubagentActivity node={side.node} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onToast={notify}/>
-    : sideTerminal ? <SideTerminal node={side.node} terminal={sideTerminal} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onExit={markExited} onToast={notify} appearance={appearance}/>
+    : sideTerminal ? <SideTerminal node={side.node} terminal={sideTerminal} terminals={terminals} workspaceName={activeWorkspace?.name ?? "workspace"} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onExit={markExited} onToast={notify} onSelectTerminal={selectWorkspaceTerminal} onNewTerminal={() => activeWorkspace && openNewTerminal(activeWorkspace)} appearance={appearance}/>
       : null;
   return <TooltipProvider delayDuration={250}><div id="windowbar"><Tooltip><TooltipTrigger asChild><Button id="settings-button" type="button" aria-label="Settings" onClick={() => setSettingsOpen(true)}><Settings aria-hidden="true"/></Button></TooltipTrigger><TooltipContent>Settings</TooltipContent></Tooltip></div><main style={{ gridTemplateColumns: `${railWidth}px 1px minmax(0, 1fr)` }}><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onNewTerminal={openNewTerminal} onCreate={createWorkspace} onRename={setRenameTarget} onReveal={revealWorkspace} onCopy={copyWorkspacePath} onDelete={deleteWorkspace}/><RailResizeGrip width={railWidth} setWidth={setRailWidth}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main>{settingsOpen && <SettingsModal appearance={appearance} onChange={setAppearance} onClose={() => setSettingsOpen(false)}/>} {renameTarget && <RenameWorkspaceDialog workspace={renameTarget} onClose={() => setRenameTarget(null)} onRename={renameWorkspace}/>}<div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></TooltipProvider>;
 }
