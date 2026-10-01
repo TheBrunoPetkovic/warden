@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Crosshair, Minus, Plus, X } from "lucide-react";
 import { Button } from "./components/ui/button.jsx";
 import { Checkbox } from "./components/ui/checkbox.jsx";
 
@@ -49,7 +49,7 @@ const curvePoint = (from, to, t) => {
   };
 };
 
-function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
+function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect, onControls }) {
   const ref = useRef(null);
   const view = useRef({ x: 0, y: 0, k: 1, fitted: false });
   const pointer = useRef(null);
@@ -150,6 +150,31 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
   }, [nodes, paint]);
   useEffect(() => paint(), [paint]);
 
+  const zoom = useCallback(factor => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const x = bounds.width / 2, y = bounds.height / 2;
+    const next = Math.max(0.3, Math.min(2.5, view.current.k * factor));
+    view.current.x = x - ((x - view.current.x) / view.current.k) * next;
+    view.current.y = y - ((y - view.current.y) / view.current.k) * next;
+    view.current.k = next;
+    paint();
+  }, [paint]);
+  const center = useCallback(() => {
+    const canvas = ref.current;
+    if (!canvas || !nodes.length) return;
+    const bounds = canvas.getBoundingClientRect();
+    const centroid = nodes.reduce((total, node) => ({ x: total.x + node.x, y: total.y + node.y }), { x: 0, y: 0 });
+    view.current.x = bounds.width / 2 - (centroid.x / nodes.length) * view.current.k;
+    view.current.y = bounds.height / 2 - (centroid.y / nodes.length) * view.current.k;
+    paint();
+  }, [nodes, paint]);
+  useEffect(() => {
+    onControls?.({ zoomIn: () => zoom(1.15), zoomOut: () => zoom(1 / 1.15), center });
+    return () => onControls?.(null);
+  }, [center, onControls, zoom]);
+
   const nodeAt = event => {
     const bounds = ref.current.getBoundingClientRect(); const x = event.clientX - bounds.left, y = event.clientY - bounds.top;
     return [...nodes].reverse().find(node => {
@@ -172,6 +197,7 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
   const [pulses, setPulses] = useState([]);
+  const [graphControls, setGraphControls] = useState(null);
   const [seen, setSeen] = useState(() => new Set(JSON.parse(localStorage.getItem("warden.seen-agent-completions") ?? "[]")));
   const previous = useRef(new Map());
 
@@ -233,5 +259,5 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
     setDetail(node);
   };
   const live = nodes.filter(node => node.live).length;
-  return <div id="graphmain"><div id="graphwrap"><Canvas nodes={nodes} edges={edges} pulses={pulses} selected={selected} onSelect={setSelected} onActivate={activate}/><div id="graphbar"><label className="toggle"><Checkbox checked={showSubagents} onCheckedChange={checked => setShowSubagents(Boolean(checked))} aria-label="Show subagent sessions"/> show subagent sessions</label></div><div id="graphinfo"><span className="chip">{live} running</span>{nodes.length - live > 0 && <span className="chip">{nodes.length - live} subagent</span>}{error && <span className="chip warn">unavailable: {error}</span>}</div>{!nodes.length && <div id="gempty"><div>{data.workspace ? `No agents running in ${data.workspace.name}` : "No workspace open"}</div><div>Agents started in this workspace will appear here.</div></div>}{detail && <div id="detail"><Button className="x" type="button" onClick={() => setDetail(null)} aria-label="Close details"><X aria-hidden="true"/></Button><h2>{detail.title}</h2><div className="row"><span className="k">state</span><span className="v">{stateLabel(detail.visualState)}</span></div><div className="row"><span className="k">runtime</span><span className="v">{detail.live ? `${detail.runtime} (running)` : `${detail.runtime} subagent`}</span></div><div className="row"><span className="k">directory</span><span className="v">{data.workspace?.path ?? "—"}</span></div><div className="row"><span className="k">session</span><span className="v">{detail.sessionId ?? "—"}</span></div><div className="row"><span className="k">updated</span><span className="v">{detail.live ? `started ${new Date(detail.startedAt).toLocaleTimeString()}` : `last write ${ago(detail.updated)}`}</span></div><div className="rel">{detail.parentId ? `child of ${nodes.find(node => node.id === detail.parentId)?.title ?? detail.parentId}` : detail.live ? "root agent" : "subagent session"}</div></div>}</div>{sidePanel ?? (nodes.length ? <ul id="agentlist" aria-label="Running agents">{nodes.map(node => <li key={node.id}><Button type="button" onClick={() => { setSelected(node); activate(node); }} title={node.live && node.terminalId ? `Open chat for ${node.terminalId}` : !node.live && node.runtime === "opencode" ? "Watch this subagent's activity" : "Show details"}><span className="name">{node.title}</span><span className="meta">{node.runtime} · {stateLabel(node.visualState).toLowerCase()}</span>{(node.live && node.terminalId) || (!node.live && node.runtime === "opencode") ? <span className="go">{node.live ? "open chat →" : "watch activity →"}</span> : null}</Button></li>)}</ul> : null)}</div>;
+  return <div id="graphmain"><div id="graphwrap"><Canvas nodes={nodes} edges={edges} pulses={pulses} selected={selected} onSelect={setSelected} onActivate={activate} onControls={setGraphControls}/><div id="graphbar"><label className="toggle"><Checkbox checked={showSubagents} onCheckedChange={checked => setShowSubagents(Boolean(checked))} aria-label="Show subagent sessions"/> show subagent sessions</label><div className="graph-controls"><Button type="button" className="graph-control" onClick={() => graphControls?.zoomIn()} disabled={!graphControls} title="Zoom in" aria-label="Zoom in"><Plus aria-hidden="true"/></Button><Button type="button" className="graph-control" onClick={() => graphControls?.zoomOut()} disabled={!graphControls} title="Zoom out" aria-label="Zoom out"><Minus aria-hidden="true"/></Button><Button type="button" className="graph-control center" onClick={() => graphControls?.center()} disabled={!graphControls || !nodes.length}><Crosshair aria-hidden="true"/><span>Center</span></Button></div></div><div id="graphinfo"><span className="chip">{live} running</span>{nodes.length - live > 0 && <span className="chip">{nodes.length - live} subagent</span>}{error && <span className="chip warn">unavailable: {error}</span>}</div>{!nodes.length && <div id="gempty"><div>{data.workspace ? `No agents running in ${data.workspace.name}` : "No workspace open"}</div><div>Agents started in this workspace will appear here.</div></div>}{detail && <div id="detail"><Button className="x" type="button" onClick={() => setDetail(null)} aria-label="Close details"><X aria-hidden="true"/></Button><h2>{detail.title}</h2><div className="row"><span className="k">state</span><span className="v">{stateLabel(detail.visualState)}</span></div><div className="row"><span className="k">runtime</span><span className="v">{detail.live ? `${detail.runtime} (running)` : `${detail.runtime} subagent`}</span></div><div className="row"><span className="k">directory</span><span className="v">{data.workspace?.path ?? "—"}</span></div><div className="row"><span className="k">session</span><span className="v">{detail.sessionId ?? "—"}</span></div><div className="row"><span className="k">updated</span><span className="v">{detail.live ? `started ${new Date(detail.startedAt).toLocaleTimeString()}` : `last write ${ago(detail.updated)}`}</span></div><div className="rel">{detail.parentId ? `child of ${nodes.find(node => node.id === detail.parentId)?.title ?? detail.parentId}` : detail.live ? "root agent" : "subagent session"}</div></div>}</div>{sidePanel ?? (nodes.length ? <ul id="agentlist" aria-label="Running agents">{nodes.map(node => <li key={node.id}><Button type="button" onClick={() => { setSelected(node); activate(node); }} title={node.live && node.terminalId ? `Open chat for ${node.terminalId}` : !node.live && node.runtime === "opencode" ? "Watch this subagent's activity" : "Show details"}><span className="name">{node.title}</span><span className="meta">{node.runtime} · {stateLabel(node.visualState).toLowerCase()}</span>{(node.live && node.terminalId) || (!node.live && node.runtime === "opencode") ? <span className="go">{node.live ? "open chat →" : "watch activity →"}</span> : null}</Button></li>)}</ul> : null)}</div>;
 }
