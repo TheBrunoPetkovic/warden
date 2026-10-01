@@ -14,7 +14,7 @@
     "build:desktop": "npm run build && esbuild src/electron/main.ts --bundle --platform=node --format=esm --packages=external --target=node22 --outfile=dist-electron/main.mjs",
     "rebuild:electron": "electron-rebuild -f -w node-pty",
     "desktop": "npm run build:desktop && electron .",
-    "package:mac": "npm run build:desktop && npm run rebuild:electron && electron-packager . Warden --platform=darwin --arch=arm64 --out=release --overwrite --asar.unpackDir=node_modules/node-pty",
+    "package:mac": "npm run build:desktop && npm run rebuild:electron && electron-packager . Warden --platform=darwin --arch=arm64 --out=release --overwrite --icon=assets/Warden.icns --asar.unpackDir=node_modules/node-pty",
     "dev": "npm run desktop",
     "start": "npm run desktop",
     "server": "node --experimental-strip-types src/index.ts"

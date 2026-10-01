@@ -15,6 +15,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 620,
     title: "Warden",
+    icon: join(app.getAppPath(), "assets", "warden-logo.png"),
     // Keep macOS window controls, but do not reserve a branded application
     // header above the agent workspace.
     titleBarStyle: "hiddenInset",
@@ -40,6 +41,9 @@ function createWindow() {
 
 app.setName("Warden");
 app.whenReady().then(async () => {
+  if (process.platform === "darwin") {
+    app.dock.setIcon(join(app.getAppPath(), "assets", "warden-logo.png"));
+  }
   // The HTTP server is loopback-only and uses a random OS-assigned port. It is
   // an internal transport between this renderer and Warden's main process,
   // rather than a browser-facing development server.
