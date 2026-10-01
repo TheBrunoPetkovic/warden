@@ -19,6 +19,16 @@ const SCHEMES = [
   ["dracula", "Dracula", "#bd93f9"],
   ["nord", "Nord", "#88c0d0"],
   ["gruvbox", "Gruvbox", "#fabd2f"],
+  ["one-dark", "One Dark", "#61afef"],
+  ["solarized", "Solarized Dark", "#2aa198"],
+  ["monokai", "Monokai", "#a6e22e"],
+  ["rose-pine", "Rosé Pine", "#c4a7e7"],
+  ["kanagawa", "Kanagawa", "#7e9cd8"],
+  ["everforest", "Everforest", "#a7c080"],
+  ["night-owl", "Night Owl", "#82aaff"],
+  ["ayu", "Ayu Mirage", "#ffcc66"],
+  ["material", "Material", "#80cbc4"],
+  ["cyberpunk", "Cyberpunk", "#f92aad"],
 ];
 
 const readAppearance = () => {
@@ -197,5 +207,5 @@ export function App() {
     ? <SubagentActivity node={side.node} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onToast={notify}/>
     : sideTerminal ? <SideTerminal node={side.node} terminal={sideTerminal} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onExit={markExited} onToast={notify} appearance={appearance}/>
       : null;
-  return <><div id="windowbar"><button id="settings-button" type="button" title="Settings" aria-label="Settings" onClick={() => setSettingsOpen(true)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm9 3.6a7.9 7.9 0 0 0-.11-1.28l2.02-1.58-2-3.46-2.38.96a8.32 8.32 0 0 0-2.2-1.28L16 2.9h-4l-.34 2.53a8.32 8.32 0 0 0-2.2 1.28l-2.38-.96-2-3.46 2.02 1.58A7.9 7.9 0 0 0 7 12c0 .43.04.86.11 1.28L5.1 14.86l2 3.46 2.38-.96a8.32 8.32 0 0 0 2.2 1.28L12 21.1h4l.34-2.53a8.32 8.32 0 0 0 2.2-1.28l2.38.96 2-3.46-2.02-1.58c.07-.42.11-.85.11-1.28Z"/></svg></button></div><main style={{ gridTemplateColumns: `${railWidth}px 8px minmax(0, 1fr)` }}><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace}/><RailResizeGrip width={railWidth} setWidth={setRailWidth}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main>{settingsOpen && <SettingsModal appearance={appearance} onChange={setAppearance} onClose={() => setSettingsOpen(false)}/>}<div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></>;
+  return <><div id="windowbar"><button id="settings-button" type="button" title="Settings" aria-label="Settings" onClick={() => setSettingsOpen(true)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm9 3.6a7.9 7.9 0 0 0-.11-1.28l2.02-1.58-2-3.46-2.38.96a8.32 8.32 0 0 0-2.2-1.28L16 2.9h-4l-.34 2.53a8.32 8.32 0 0 0-2.2 1.28l-2.38-.96-2-3.46 2.02 1.58A7.9 7.9 0 0 0 7 12c0 .43.04.86.11 1.28L5.1 14.86l2 3.46 2.38-.96a8.32 8.32 0 0 0 2.2 1.28L12 21.1h4l.34-2.53a8.32 8.32 0 0 0 2.2-1.28l2.38.96 2-3.46-2.02-1.58c.07-.42.11-.85.11-1.28Z"/></svg></button></div><main style={{ gridTemplateColumns: `${railWidth}px 4px minmax(0, 1fr)` }}><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace}/><RailResizeGrip width={railWidth} setWidth={setRailWidth}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main>{settingsOpen && <SettingsModal appearance={appearance} onChange={setAppearance} onClose={() => setSettingsOpen(false)}/>}<div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></>;
 }
