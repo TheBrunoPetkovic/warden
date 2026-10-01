@@ -32,6 +32,13 @@
   --pad: 10px;
 }
 
+:root[data-theme="dark"][data-scheme="tokyo-night"] { --bg:#1a1b26; --surface:#24283b; --raised:#292e42; --line:#3b4261; --line-soft:#2f354e; --fg:#c0caf5; --fg-muted:#a9b1d6; --fg-subtle:#565f89; --accent:#7aa2f7; --accent-fg:#b4d0ff; --danger:#f7768e; --ok:#9ece6a; }
+:root[data-theme="dark"][data-scheme="catppuccin"] { --bg:#1e1e2e; --surface:#181825; --raised:#313244; --line:#45475a; --line-soft:#3a3c4e; --fg:#cdd6f4; --fg-muted:#bac2de; --fg-subtle:#6c7086; --accent:#89b4fa; --accent-fg:#b9d4ff; --danger:#f38ba8; --ok:#a6e3a1; }
+:root[data-theme="dark"][data-scheme="dracula"] { --bg:#282a36; --surface:#21222c; --raised:#343746; --line:#6272a4; --line-soft:#44475a; --fg:#f8f8f2; --fg-muted:#d6d6d8; --fg-subtle:#8991b5; --accent:#bd93f9; --accent-fg:#d6bcfa; --danger:#ff5555; --ok:#50fa7b; }
+:root[data-theme="dark"][data-scheme="nord"] { --bg:#2e3440; --surface:#3b4252; --raised:#434c5e; --line:#4c566a; --line-soft:#434c5e; --fg:#eceff4; --fg-muted:#d8dee9; --fg-subtle:#81a1c1; --accent:#88c0d0; --accent-fg:#aee4f0; --danger:#bf616a; --ok:#a3be8c; }
+:root[data-theme="dark"][data-scheme="gruvbox"] { --bg:#282828; --surface:#1d2021; --raised:#3c3836; --line:#665c54; --line-soft:#504945; --fg:#ebdbb2; --fg-muted:#d5c4a1; --fg-subtle:#a89984; --accent:#fabd2f; --accent-fg:#ffe099; --danger:#fb4934; --ok:#b8bb26; }
+:root[data-theme="light"] { --bg:#f7f8fb; --surface:#ffffff; --raised:#eef1f7; --line:#d8dde8; --line-soft:#e6e9f0; --fg:#1e2636; --fg-muted:#475569; --fg-subtle:#7c879a; --accent:#2563eb; --accent-fg:#1d4ed8; --danger:#dc2626; --ok:#16a34a; }
+
 * { box-sizing: border-box; }
 
 body {
@@ -52,15 +59,24 @@ body {
  * intentionally empty strip reserves the space they occupy so no workspace UI
  * sits behind close, minimise, and maximise. */
 #windowbar {
+  position: relative;
   height: 34px;
   flex: none;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
   -webkit-app-region: drag;
 }
+#settings-button {
+  position: absolute; top: 4px; right: 12px; width: 26px; height: 26px;
+  display: grid; place-items: center; border: 0; border-radius: 6px;
+  color: var(--fg-muted); background: transparent; cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+#settings-button:hover { background: var(--raised); color: var(--fg); }
+#settings-button svg { width: 16px; height: 16px; fill: currentColor; }
 /* ---- layout ---- */
 .spacer { flex: 1; }
-main { flex: 1; display: grid; grid-template-columns: 236px 1fr; min-height: 0; }
+main { flex: 1; display: grid; min-height: 0; }
 
 /* The canvas owns the entire primary column; terminal chats mount only in the
  * detachable side panel, never behind the agent graph. */
@@ -73,6 +89,21 @@ main { flex: 1; display: grid; grid-template-columns: 236px 1fr; min-height: 0; 
   display: flex; flex-direction: column;
   min-height: 0;
 }
+#railgrip {
+  cursor: col-resize;
+  touch-action: none;
+  position: relative;
+  z-index: 2;
+  background: var(--line);
+}
+#railgrip::after {
+  content: "";
+  position: absolute; inset: 0 3px;
+  background: transparent;
+  transition: background .12s ease;
+}
+#railgrip:hover::after, #railgrip.drag::after { background: var(--accent); }
+#railgrip:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
 .rail-head {
   display: flex; align-items: center;
   padding: 10px 12px 8px;
@@ -151,6 +182,29 @@ button { font: inherit; }
 }
 .icon-btn:hover { background: var(--gray-5); color: var(--fg); }
 .icon-btn:disabled { opacity: .4; cursor: default; }
+
+/* ---- settings ---- */
+#settings-backdrop { position: fixed; inset: 0; z-index: 30; background: #0008; display: grid; place-items: center; padding: 32px; }
+#settings-modal { width: min(720px, 100%); height: min(500px, 100%); display: grid; grid-template-columns: 190px 1fr; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 28px 80px #0008; }
+#settings-nav { padding: 20px 10px; border-right: 1px solid var(--line); background: var(--raised); }
+.settings-nav-label, .settings-group-title { color: var(--fg-subtle); font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
+.settings-nav-label { padding: 0 10px 12px; }
+.settings-nav-item { width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-muted); text-align: left; cursor: default; font: inherit; font-size: 12px; }
+.settings-nav-item.active { background: var(--surface); color: var(--fg); box-shadow: inset 2px 0 var(--accent); }
+#settings-content { min-width: 0; overflow: auto; padding: 0 24px 28px; }
+.settings-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 0 18px; border-bottom: 1px solid var(--line-soft); }
+.settings-header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+.settings-group { padding-top: 22px; }
+.settings-group-title { margin-bottom: 10px; }
+.theme-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.theme-option, .scheme-option { border: 1px solid var(--line); background: var(--bg); color: var(--fg-muted); cursor: pointer; font: inherit; }
+.theme-option { min-height: 78px; padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; font-size: 11px; }
+.theme-option.selected, .scheme-option.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); color: var(--fg); }
+.theme-preview { width: 100%; height: 34px; border: 1px solid var(--line); border-radius: 4px; background: #1a1b26; }
+.theme-preview.light { background: #f7f8fb; }.theme-preview.system { background: linear-gradient(90deg, #f7f8fb 50%, #1a1b26 50%); }
+.scheme-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.scheme-option { min-height: 42px; padding: 8px 10px; border-radius: 7px; display: flex; align-items: center; gap: 9px; text-align: left; font-size: 11px; }
+.scheme-option i { width: 14px; height: 14px; flex: none; border-radius: 50%; background: var(--swatch); }.scheme-option b { margin-left: auto; color: var(--accent); font-size: 12px; }
 
 /* toast: transient errors only; nothing here should be a permanent banner */
 #toast {

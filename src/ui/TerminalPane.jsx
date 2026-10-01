@@ -3,7 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 
 /** One browser xterm attached to one Warden PTY. */
-export function TerminalPane({ terminal, startupInput, onExit, onError }) {
+export function TerminalPane({ terminal, startupInput, onExit, onError, appearance }) {
   const host = useRef(null);
   const startup = useRef(startupInput);
 
@@ -22,11 +22,11 @@ export function TerminalPane({ terminal, startupInput, onExit, onError }) {
       scrollback: 50000,
       allowProposedApi: true,
       theme: {
-        background: "#111318",
-        foreground: "#eeeeF0",
-        cursor: "#0090ff",
-        selectionBackground: "#214a70",
-        black: "#111318",
+        background: css("--bg", "#111318"),
+        foreground: css("--fg", "#eeeeF0"),
+        cursor: css("--accent", "#0090ff"),
+        selectionBackground: css("--raised", "#214a70"),
+        black: css("--bg", "#111318"),
       },
     });
     const fit = new FitAddon();
@@ -90,7 +90,11 @@ export function TerminalPane({ terminal, startupInput, onExit, onError }) {
       socket.close();
       term.dispose();
     };
-  }, [terminal?.id, onError, onExit]);
+  }, [terminal?.id, onError, onExit, appearance?.theme, appearance?.scheme]);
 
   return <div className="terminal-host" ref={host} />;
+}
+
+function css(variable, fallback) {
+  return getComputedStyle(document.documentElement).getPropertyValue(variable).trim() || fallback;
 }

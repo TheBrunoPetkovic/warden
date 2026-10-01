@@ -13,6 +13,23 @@ const api = async (path, options = {}) => {
   return json;
 };
 
+const SCHEMES = [
+  ["tokyo-night", "Tokyo Night", "#7aa2f7"],
+  ["catppuccin", "Catppuccin", "#89b4fa"],
+  ["dracula", "Dracula", "#bd93f9"],
+  ["nord", "Nord", "#88c0d0"],
+  ["gruvbox", "Gruvbox", "#fabd2f"],
+];
+
+const readAppearance = () => {
+  try { return { theme: "system", scheme: "tokyo-night", ...JSON.parse(localStorage.getItem("warden.appearance") ?? "{}") }; }
+  catch { return { theme: "system", scheme: "tokyo-night" }; }
+};
+
+function SettingsModal({ appearance, onChange, onClose }) {
+  return <div id="settings-backdrop" role="presentation" onMouseDown={onClose}><section id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={event => event.stopPropagation()}><aside id="settings-nav"><div className="settings-nav-label">Settings</div><button className="settings-nav-item active" type="button">Appearance</button></aside><div id="settings-content"><header className="settings-header"><h1 id="settings-title">Appearance</h1><button className="icon-btn" type="button" onClick={onClose} aria-label="Close settings">×</button></header><section className="settings-group"><div className="settings-group-title">Theme</div><div className="theme-options">{[["dark", "Dark"], ["light", "Light"], ["system", "System"]].map(([id, label]) => <button key={id} type="button" className={`theme-option ${appearance.theme === id ? "selected" : ""}`} onClick={() => onChange({ ...appearance, theme: id })}><span className={`theme-preview ${id}`}/><span>{label}</span></button>)}</div></section><section className="settings-group"><div className="settings-group-title">Color Scheme</div><div className="scheme-options">{SCHEMES.map(([id, label, color]) => <button key={id} type="button" className={`scheme-option ${appearance.scheme === id ? "selected" : ""}`} onClick={() => onChange({ ...appearance, scheme: id })}><i style={{ "--swatch": color }}/><span>{label}</span>{appearance.scheme === id && <b>✓</b>}</button>)}</div></section></div></section></div>;
+}
+
 function WorkspaceRail({ workspaces, activeId, onOpen, onCreate, onDelete }) {
   const [name, setName] = useState("");
   const submit = async event => {
@@ -41,9 +58,26 @@ function ResizeGrip({ width, setWidth }) {
   return <div id="sidegrip" className={resizing ? "drag" : ""} role="separator" aria-orientation="vertical" tabIndex="0" aria-label="Resize terminal panel" aria-valuemin="240" aria-valuenow={width} onPointerDown={startResize} onPointerMove={resize} onPointerUp={stopResize} onPointerCancel={stopResize} onKeyDown={event => { const delta = event.key === "ArrowLeft" ? 24 : event.key === "ArrowRight" ? -24 : 0; if (delta) { event.preventDefault(); setWidth(clamp(width + delta)); } }}/>;
 }
 
-function SideTerminal({ node, terminal, width, setWidth, onClose, onExit, onToast }) {
+function RailResizeGrip({ width, setWidth }) {
+  const [resizing, setResizing] = useState(false);
+  const drag = useRef(null);
+  const clamp = value => Math.max(180, Math.min(value, Math.round(window.innerWidth * 0.45)));
+  const startResize = event => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { start: event.clientX, width };
+    setResizing(true);
+  };
+  const resize = event => {
+    if (!drag.current) return;
+    setWidth(clamp(drag.current.width + event.clientX - drag.current.start));
+  };
+  const stopResize = () => { drag.current = null; setResizing(false); };
+  return <div id="railgrip" className={resizing ? "drag" : ""} role="separator" aria-orientation="vertical" tabIndex="0" aria-label="Resize workspace sidebar" aria-valuemin="180" aria-valuenow={width} onPointerDown={startResize} onPointerMove={resize} onPointerUp={stopResize} onPointerCancel={stopResize} onKeyDown={event => { const delta = event.key === "ArrowLeft" ? -24 : event.key === "ArrowRight" ? 24 : 0; if (delta) { event.preventDefault(); setWidth(clamp(width + delta)); } }}/>;
+}
+
+function SideTerminal({ node, terminal, width, setWidth, onClose, onExit, onToast, appearance }) {
   const meta = node?.workspaceTerminal ? `terminal · ${terminal.id}` : node?.live ? `${node.runtime} · pid ${node.pid}` : `${node?.runtime ?? "terminal"} subagent · ${terminal.id}`;
-  return <div id="sidepanel" style={{ "--side-w": `${width}px` }}><ResizeGrip width={width} setWidth={setWidth}/><div id="sidehead" tabIndex="-1"><span className="t">{node?.title ?? terminal.name ?? terminal.id}</span><span className="m">{meta}</span><span className="spacer"/><button className="icon-btn" onClick={onClose} title="Close terminal panel" aria-label="Close terminal panel">×</button></div><div id="sideterm"><TerminalPane terminal={terminal} startupInput={terminal.startupInput} onExit={onExit} onError={onToast}/></div></div>;
+  return <div id="sidepanel" style={{ "--side-w": `${width}px` }}><ResizeGrip width={width} setWidth={setWidth}/><div id="sidehead" tabIndex="-1"><span className="t">{node?.title ?? terminal.name ?? terminal.id}</span><span className="m">{meta}</span><span className="spacer"/><button className="icon-btn" onClick={onClose} title="Close terminal panel" aria-label="Close terminal panel">×</button></div><div id="sideterm"><TerminalPane terminal={terminal} startupInput={terminal.startupInput} onExit={onExit} onError={onToast} appearance={appearance}/></div></div>;
 }
 
 function SubagentActivity({ node, width, setWidth, onClose, onToast }) {
@@ -70,12 +104,32 @@ export function App() {
   const [termsByWorkspace, setTermsByWorkspace] = useState({});
   const [side, setSide] = useState(null);
   const [sideWidth, setSideWidth] = useState(420);
+  const [railWidth, setRailWidth] = useState(() => {
+    const stored = Number(localStorage.getItem("warden.workspace-sidebar-width"));
+    return Number.isFinite(stored) ? Math.max(180, Math.min(stored, 500)) : 236;
+  });
   const [toast, setToast] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [appearance, setAppearance] = useState(readAppearance);
   const terminals = termsByWorkspace[activeWs] ?? [];
   const notify = useCallback(message => {
     setToast(message);
     window.setTimeout(() => setToast(current => current === message ? "" : current), 4000);
   }, []);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const theme = appearance.theme === "system" ? (media.matches ? "dark" : "light") : appearance.theme;
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.dataset.scheme = appearance.scheme;
+      document.documentElement.classList.toggle("dark", theme === "dark");
+    };
+    apply();
+    media.addEventListener("change", apply);
+    localStorage.setItem("warden.appearance", JSON.stringify(appearance));
+    return () => media.removeEventListener("change", apply);
+  }, [appearance]);
+  useEffect(() => { localStorage.setItem("warden.workspace-sidebar-width", String(railWidth)); }, [railWidth]);
   const syncTerminals = useCallback(async workspaceId => {
     const all = await api("/api/terminals");
     const terms = all.filter(terminal => terminal.workspaceId === workspaceId).map(terminal => ({ id: terminal.id, workspaceId: terminal.workspaceId, dead: !terminal.alive }));
@@ -141,7 +195,7 @@ export function App() {
   const sideTerminal = side?.kind === "terminal" ? terminals.find(terminal => terminal.id === side.termId) : null;
   const sidePanel = side?.kind === "subagent"
     ? <SubagentActivity node={side.node} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onToast={notify}/>
-    : sideTerminal ? <SideTerminal node={side.node} terminal={sideTerminal} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onExit={markExited} onToast={notify}/>
+    : sideTerminal ? <SideTerminal node={side.node} terminal={sideTerminal} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onExit={markExited} onToast={notify} appearance={appearance}/>
       : null;
-  return <><div id="windowbar" aria-hidden="true"/><main><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main><div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></>;
+  return <><div id="windowbar"><button id="settings-button" type="button" title="Settings" aria-label="Settings" onClick={() => setSettingsOpen(true)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm9 3.6a7.9 7.9 0 0 0-.11-1.28l2.02-1.58-2-3.46-2.38.96a8.32 8.32 0 0 0-2.2-1.28L16 2.9h-4l-.34 2.53a8.32 8.32 0 0 0-2.2 1.28l-2.38-.96-2-3.46 2.02 1.58A7.9 7.9 0 0 0 7 12c0 .43.04.86.11 1.28L5.1 14.86l2 3.46 2.38-.96a8.32 8.32 0 0 0 2.2 1.28L12 21.1h4l.34-2.53a8.32 8.32 0 0 0 2.2-1.28l2.38.96 2-3.46-2.02-1.58c.07-.42.11-.85.11-1.28Z"/></svg></button></div><main style={{ gridTemplateColumns: `${railWidth}px 8px minmax(0, 1fr)` }}><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace}/><RailResizeGrip width={railWidth} setWidth={setRailWidth}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main>{settingsOpen && <SettingsModal appearance={appearance} onChange={setAppearance} onClose={() => setSettingsOpen(false)}/>}<div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></>;
 }

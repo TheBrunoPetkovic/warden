@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const css = variable => getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
-const stateVar = { working: "--green-9", "needs-input": "--red-9", "complete-unread": "--blue-9", "complete-read": "--gray-8", idle: "--yellow-9", failed: "--orange-9" };
-const colorFor = state => css(stateVar[state] ?? "--gray-8");
+const stateVar = { working: "--ok", "needs-input": "--danger", "complete-unread": "--accent", "complete-read": "--fg-subtle", idle: "--accent-fg", failed: "--danger" };
+const colorFor = state => css(stateVar[state] ?? "--fg-subtle");
 const stateLabel = state => ({ working: "WORKING", "needs-input": "INPUT NEEDED", "complete-unread": "DONE · UNREAD", "complete-read": "DONE · READ", idle: "IDLE", failed: "FAILED" })[state] ?? "IDLE";
 const ago = ms => {
   const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -67,11 +67,11 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, bounds.width, bounds.height);
     const now = performance.now();
-    const bright = css("--gray-12");
+    const bright = css("--fg");
     for (const edge of edges) {
       const from = anchor(edge.from, true), to = anchor(edge.to, false);
       const hot = selected?.id === edge.from.id || selected?.id === edge.to.id;
-      context.strokeStyle = hot ? bright : css("--gray-7");
+      context.strokeStyle = hot ? bright : css("--line");
       context.lineWidth = hot ? 1.6 : 1;
       context.beginPath(); context.moveTo(from.x, from.y);
       context.bezierCurveTo((from.x + to.x) / 2, from.y, (from.x + to.x) / 2, to.y, to.x, to.y);
@@ -105,9 +105,9 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
       context.beginPath(); context.roundRect(point.x - node.width / 2, point.y - node.height / 2, node.width, node.height, 8); context.fill(); context.stroke();
       context.fillStyle = color; context.beginPath(); context.arc(point.x - node.width / 2 + 14, point.y - 10, 4, 0, Math.PI * 2); context.fill();
       context.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace"; context.textAlign = "left"; context.textBaseline = "middle";
-      context.fillStyle = picked ? bright : css("--gray-11");
+      context.fillStyle = picked ? bright : css("--fg-muted");
       context.fillText(node.title.length > 21 ? `${node.title.slice(0, 20)}…` : node.title, point.x - node.width / 2 + 24, point.y - 10);
-      context.font = "9.5px ui-monospace, SFMono-Regular, Menlo, monospace"; context.fillStyle = css("--gray-9");
+      context.font = "9.5px ui-monospace, SFMono-Regular, Menlo, monospace"; context.fillStyle = css("--fg-subtle");
       context.fillText(`${stateLabel(node.visualState)} · ${node.runtime}`, point.x - node.width / 2 + 24, point.y + 10);
       if (working) {
         const phase = reducedMotion ? 2 : Math.floor(now / 180) % 3;
