@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* shadcn/ui is the shared interaction layer. Visual tokens remain Warden's. */
+.ui-button { font: inherit; }
+.ui-tooltip {
+  z-index: 60;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--raised);
+  color: var(--fg);
+  padding: 4px 7px;
+  font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  box-shadow: 0 8px 20px #0006;
+}

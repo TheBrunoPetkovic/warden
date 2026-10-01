@@ -83,7 +83,7 @@ body {
   -webkit-app-region: no-drag;
 }
 #settings-button:hover { background: var(--raised); color: var(--fg); }
-#settings-button svg { width: 16px; height: 16px; fill: currentColor; }
+#settings-button svg { width: 16px; height: 16px; stroke: currentColor; }
 /* ---- layout ---- */
 .spacer { flex: 1; }
 main { flex: 1; display: grid; min-height: 0; }
@@ -108,7 +108,7 @@ main { flex: 1; display: grid; min-height: 0; }
 }
 #railgrip::after {
   content: "";
-  position: absolute; inset: 0;
+  position: absolute; inset: 0 -4px;
   background: transparent;
   transition: background .12s ease;
 }
@@ -151,6 +151,7 @@ main { flex: 1; display: grid; min-height: 0; }
   border-radius: 3px; font-size: 13px; opacity: 0;
 }
 .ws:hover .kill { opacity: 1; }
+.ws .kill svg { width: 13px; height: 13px; stroke: currentColor; }
 .ws .kill:hover { background: var(--red-3); color: var(--red-11); }
 /* A registry record whose directory is gone. It stays selectable-looking so the
    delete affordance is reachable, but it must not read as a working workspace. */
@@ -192,10 +193,11 @@ button { font: inherit; }
 }
 .icon-btn:hover { background: var(--gray-5); color: var(--fg); }
 .icon-btn:disabled { opacity: .4; cursor: default; }
+.icon-btn svg, #detail .x svg { width: 14px; height: 14px; stroke: currentColor; }
 
 /* ---- settings ---- */
-#settings-backdrop { position: fixed; inset: 0; z-index: 30; background: #0008; display: grid; place-items: center; padding: 32px; }
-#settings-modal { width: min(720px, 100%); height: min(500px, 100%); display: grid; grid-template-columns: 190px 1fr; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 28px 80px #0008; }
+#settings-backdrop { position: fixed; inset: 0; z-index: 30; background: #0008; }
+#settings-modal { position: fixed; z-index: 31; left: 50%; top: 50%; width: min(720px, calc(100% - 64px)); height: min(500px, calc(100% - 64px)); transform: translate(-50%, -50%); display: grid; grid-template-columns: 190px 1fr; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 28px 80px #0008; }
 #settings-nav { padding: 20px 10px; border-right: 1px solid var(--line); background: var(--raised); }
 .settings-nav-label, .settings-group-title { color: var(--fg-subtle); font-size: 10px; text-transform: uppercase; letter-spacing: .09em; }
 .settings-nav-label { padding: 0 10px 12px; }
@@ -242,7 +244,13 @@ button { font: inherit; }
   border-radius: var(--r-sm); padding: 3px 8px;
 }
 #graphbar .toggle:hover { border-color: var(--accent); }
-#graphbar .toggle input { margin: 0; accent-color: var(--accent); }
+#graphbar .toggle .ui-checkbox {
+  width: 14px; height: 14px; margin: 0; padding: 0;
+  display: grid; place-items: center; border: 1px solid var(--line);
+  border-radius: 3px; background: var(--bg); color: var(--bg); cursor: pointer;
+}
+#graphbar .toggle .ui-checkbox[data-state="checked"] { background: var(--accent); border-color: var(--accent); }
+#graphbar .toggle .ui-checkbox svg { width: 11px; height: 11px; stroke: currentColor; }
 #graphbar .win-note { font-size: 10px; color: var(--fg-subtle); opacity: .75; }
 
 #graphinfo {

@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@xterm/xterm/css/xterm.css";
+import "./styles.css";
 import "@radix-ui/colors/gray-dark.css";
 import "@radix-ui/colors/blue-dark.css";
 import "@radix-ui/colors/green-dark.css";
