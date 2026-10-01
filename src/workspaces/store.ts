@@ -111,15 +111,18 @@ export class WorkspaceStore {
    * path is allowed only if it already exists -- creating a tree at an
    * arbitrary absolute location is how you end up with ~/a/b/c surprises.
    */
-  async create(name: string, path?: string): Promise<Workspace> {
+  async create(name: string, path?: string, basePath?: string): Promise<Workspace> {
     const clean = assertSafeName(name);
     const all = await this.load();
 
     const dir = path
       ? resolve(path)
-      : join(DATA_DIR, "workspaces", `${slug(clean)}`);
+      : basePath
+        ? join(resolve(basePath), slug(clean))
+        : join(DATA_DIR, "workspaces", `${slug(clean)}`);
 
     if (path && !isAbsolute(path)) throw new HttpError(400, "path must be absolute");
+    if (basePath && !isAbsolute(basePath)) throw new HttpError(400, "default workspace location must be absolute");
 
     if (!existsSync(dir)) {
       if (path) throw new HttpError(400, `path does not exist: ${dir}`);

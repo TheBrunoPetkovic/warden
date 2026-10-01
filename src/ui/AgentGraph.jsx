@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Crosshair, Minus, Plus, X } from "lucide-react";
+import { Button } from "./components/ui/button.jsx";
+import { Checkbox } from "./components/ui/checkbox.jsx";
 
 const css = variable => getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
-const stateVar = { working: "--green-9", "needs-input": "--red-9", "complete-unread": "--blue-9", "complete-read": "--gray-8", idle: "--yellow-9", failed: "--orange-9" };
-const colorFor = state => css(stateVar[state] ?? "--gray-8");
+const stateVar = { working: "--ok", "needs-input": "--danger", "complete-unread": "--accent", "complete-read": "--fg-subtle", idle: "--accent-fg", failed: "--danger" };
+const colorFor = state => css(stateVar[state] ?? "--fg-subtle");
 const stateLabel = state => ({ working: "WORKING", "needs-input": "INPUT NEEDED", "complete-unread": "DONE · UNREAD", "complete-read": "DONE · READ", idle: "IDLE", failed: "FAILED" })[state] ?? "IDLE";
 const ago = ms => {
   const seconds = Math.max(0, Math.round((Date.now() - ms) / 1000));
@@ -46,11 +49,11 @@ const curvePoint = (from, to, t) => {
   };
 };
 
-function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
+function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect, onControls }) {
   const ref = useRef(null);
   const view = useRef({ x: 0, y: 0, k: 1, fitted: false });
   const pointer = useRef(null);
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  const reducedMotion = (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false) || document.documentElement.classList.contains("reduce-motion");
   const screen = point => ({ x: point.x * view.current.k + view.current.x, y: point.y * view.current.k + view.current.y });
   const anchor = (node, right) => ({ ...screen(node), x: screen(node).x + (right ? node.width / 2 : -node.width / 2) });
 
@@ -67,11 +70,11 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, bounds.width, bounds.height);
     const now = performance.now();
-    const bright = css("--gray-12");
+    const bright = css("--fg");
     for (const edge of edges) {
       const from = anchor(edge.from, true), to = anchor(edge.to, false);
       const hot = selected?.id === edge.from.id || selected?.id === edge.to.id;
-      context.strokeStyle = hot ? bright : css("--gray-7");
+      context.strokeStyle = hot ? bright : css("--line");
       context.lineWidth = hot ? 1.6 : 1;
       context.beginPath(); context.moveTo(from.x, from.y);
       context.bezierCurveTo((from.x + to.x) / 2, from.y, (from.x + to.x) / 2, to.y, to.x, to.y);
@@ -105,9 +108,9 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
       context.beginPath(); context.roundRect(point.x - node.width / 2, point.y - node.height / 2, node.width, node.height, 8); context.fill(); context.stroke();
       context.fillStyle = color; context.beginPath(); context.arc(point.x - node.width / 2 + 14, point.y - 10, 4, 0, Math.PI * 2); context.fill();
       context.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace"; context.textAlign = "left"; context.textBaseline = "middle";
-      context.fillStyle = picked ? bright : css("--gray-11");
+      context.fillStyle = picked ? bright : css("--fg-muted");
       context.fillText(node.title.length > 21 ? `${node.title.slice(0, 20)}…` : node.title, point.x - node.width / 2 + 24, point.y - 10);
-      context.font = "9.5px ui-monospace, SFMono-Regular, Menlo, monospace"; context.fillStyle = css("--gray-9");
+      context.font = "9.5px ui-monospace, SFMono-Regular, Menlo, monospace"; context.fillStyle = css("--fg-subtle");
       context.fillText(`${stateLabel(node.visualState)} · ${node.runtime}`, point.x - node.width / 2 + 24, point.y + 10);
       if (working) {
         const phase = reducedMotion ? 2 : Math.floor(now / 180) % 3;
@@ -147,6 +150,31 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
   }, [nodes, paint]);
   useEffect(() => paint(), [paint]);
 
+  const zoom = useCallback(factor => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const x = bounds.width / 2, y = bounds.height / 2;
+    const next = Math.max(0.3, Math.min(2.5, view.current.k * factor));
+    view.current.x = x - ((x - view.current.x) / view.current.k) * next;
+    view.current.y = y - ((y - view.current.y) / view.current.k) * next;
+    view.current.k = next;
+    paint();
+  }, [paint]);
+  const center = useCallback(() => {
+    const canvas = ref.current;
+    if (!canvas || !nodes.length) return;
+    const bounds = canvas.getBoundingClientRect();
+    const centroid = nodes.reduce((total, node) => ({ x: total.x + node.x, y: total.y + node.y }), { x: 0, y: 0 });
+    view.current.x = bounds.width / 2 - (centroid.x / nodes.length) * view.current.k;
+    view.current.y = bounds.height / 2 - (centroid.y / nodes.length) * view.current.k;
+    paint();
+  }, [nodes, paint]);
+  useEffect(() => {
+    onControls?.({ zoomIn: () => zoom(1.15), zoomOut: () => zoom(1 / 1.15), center });
+    return () => onControls?.(null);
+  }, [center, onControls, zoom]);
+
   const nodeAt = event => {
     const bounds = ref.current.getBoundingClientRect(); const x = event.clientX - bounds.left, y = event.clientY - bounds.top;
     return [...nodes].reverse().find(node => {
@@ -162,15 +190,18 @@ function Canvas({ nodes, edges, pulses, selected, onActivate, onSelect }) {
   />;
 }
 
-export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePanel }) {
+export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePanel, autoOpen, hideCompleted, refreshSeconds, onAgentNotification }) {
   const [data, setData] = useState({ workspace: null, agents: [], subagents: [] });
   const [showSubagents, setShowSubagents] = useState(true);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
   const [pulses, setPulses] = useState([]);
+  const [graphControls, setGraphControls] = useState(null);
   const [seen, setSeen] = useState(() => new Set(JSON.parse(localStorage.getItem("warden.seen-agent-completions") ?? "[]")));
   const previous = useRef(new Map());
+  const autoOpened = useRef(new Set());
+  const autoOpenSeeded = useRef(false);
 
   const markSeen = useCallback(node => {
     if (node.state !== "complete" || seen.has(node.id)) return;
@@ -192,17 +223,17 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
         if (!cancelled) { setData(next); setError(""); }
       } catch (cause) { if (!cancelled) setError(cause.message); }
     };
-    void load(); const poll = setInterval(load, 2000);
+    void load(); const poll = setInterval(load, Math.max(1, refreshSeconds ?? 2) * 1000);
     return () => { cancelled = true; clearInterval(poll); };
-  }, [workspaceId]);
+  }, [workspaceId, refreshSeconds]);
 
   const nodes = useMemo(() => {
     const decorate = node => ({ ...node, title: node.title || `${node.runtime} agent`, visualState: node.state === "complete" ? (seen.has(node.id) ? "complete-read" : "complete-unread") : (node.state ?? (node.live ? "working" : "idle")) });
     const roots = data.agents.map(agent => decorate({ ...agent, id: agent.sessionId ?? `pid:${agent.pid}`, live: true, sessionId: agent.sessionId }));
     const ids = new Set(roots.map(node => node.id));
     if (showSubagents) data.subagents.forEach(session => { if (!ids.has(session.id)) roots.push(decorate({ ...session, id: session.id, sessionId: session.id, live: false })); });
-    return arrange(roots, 1100, 680);
-  }, [data, seen, showSubagents]);
+    return arrange(hideCompleted ? roots.filter(node => node.state !== "complete") : roots, 1100, 680);
+  }, [data, hideCompleted, seen, showSubagents]);
   const edges = useMemo(() => {
     const ids = new Map(nodes.map(node => [node.id, node]));
     return nodes.filter(node => node.parentId && ids.has(node.parentId)).map(node => ({ from: ids.get(node.parentId), to: node }));
@@ -217,11 +248,25 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
         if (!node.parentId) continue;
         if (!before) started.push({ from: node.parentId, to: node.id, direction: "down", at: performance.now() });
         else if (node.updated && node.updated !== before.updated) started.push({ from: node.parentId, to: node.id, direction: "up", at: performance.now() });
+        if (before && node.visualState !== before.visualState && ["needs-input", "complete-unread", "failed"].includes(node.visualState)) onAgentNotification?.(node);
       }
     }
     previous.current = next;
     if (started.length) setPulses(current => [...current.filter(pulse => performance.now() - pulse.at < 1200), ...started]);
-  }, [nodes]);
+  }, [nodes, onAgentNotification]);
+
+  useEffect(() => {
+    if (!autoOpen) return;
+    if (!autoOpenSeeded.current) {
+      nodes.forEach(node => autoOpened.current.add(node.id));
+      autoOpenSeeded.current = true;
+      return;
+    }
+    const next = nodes.find(node => node.live && node.terminalId && !autoOpened.current.has(node.id));
+    if (!next) return;
+    autoOpened.current.add(next.id);
+    onOpenTerminal(next);
+  }, [autoOpen, nodes, onOpenTerminal]);
 
   const activate = node => {
     markSeen(node);
@@ -230,5 +275,5 @@ export function AgentGraph({ workspaceId, onOpenTerminal, onOpenSubagent, sidePa
     setDetail(node);
   };
   const live = nodes.filter(node => node.live).length;
-  return <div id="graphmain"><div id="graphwrap"><Canvas nodes={nodes} edges={edges} pulses={pulses} selected={selected} onSelect={setSelected} onActivate={activate}/><div id="graphbar"><label className="toggle"><input type="checkbox" checked={showSubagents} onChange={event => setShowSubagents(event.target.checked)}/> show subagent sessions</label><span className="win-note">branches flow from parent to child, left to right</span></div><div id="graphinfo"><span className="chip">{live} running</span>{nodes.length - live > 0 && <span className="chip">{nodes.length - live} subagent</span>}{error && <span className="chip warn">unavailable: {error}</span>}</div>{!nodes.length && <div id="gempty"><div>{data.workspace ? `No agents running in ${data.workspace.name}` : "No workspace open"}</div><div>Agents started in this workspace will appear here.</div></div>}<div id="graphhint">drag to pan, scroll to zoom · click a node to open its chat</div>{detail && <div id="detail"><button className="x" onClick={() => setDetail(null)} aria-label="Close details">×</button><h2>{detail.title}</h2><div className="row"><span className="k">state</span><span className="v">{stateLabel(detail.visualState)}</span></div><div className="row"><span className="k">runtime</span><span className="v">{detail.live ? `${detail.runtime} (running)` : `${detail.runtime} subagent`}</span></div><div className="row"><span className="k">directory</span><span className="v">{data.workspace?.path ?? "—"}</span></div><div className="row"><span className="k">session</span><span className="v">{detail.sessionId ?? "—"}</span></div><div className="row"><span className="k">updated</span><span className="v">{detail.live ? `started ${new Date(detail.startedAt).toLocaleTimeString()}` : `last write ${ago(detail.updated)}`}</span></div><div className="rel">{detail.parentId ? `child of ${nodes.find(node => node.id === detail.parentId)?.title ?? detail.parentId}` : detail.live ? "root agent" : "subagent session"}</div></div>}</div>{sidePanel ?? <ul id="agentlist" aria-label="Running agents">{nodes.length ? nodes.map(node => <li key={node.id}><button type="button" onClick={() => { setSelected(node); activate(node); }} title={node.live && node.terminalId ? `Open chat for ${node.terminalId}` : !node.live && node.runtime === "opencode" ? "Watch this subagent's activity" : "Show details"}><span className="name">{node.title}</span><span className="meta">{node.runtime} · {stateLabel(node.visualState).toLowerCase()}</span>{(node.live && node.terminalId) || (!node.live && node.runtime === "opencode") ? <span className="go">{node.live ? "open chat →" : "watch activity →"}</span> : null}</button></li>) : <li className="empty">no running agents in this workspace</li>}</ul>}</div>;
+  return <div id="graphmain"><div id="graphwrap"><Canvas nodes={nodes} edges={edges} pulses={pulses} selected={selected} onSelect={setSelected} onActivate={activate} onControls={setGraphControls}/><div id="graphbar"><label className="toggle"><Checkbox checked={showSubagents} onCheckedChange={checked => setShowSubagents(Boolean(checked))} aria-label="Show subagent sessions"/> show subagent sessions</label><div className="graph-controls"><Button type="button" className="graph-control" onClick={() => graphControls?.zoomIn()} disabled={!graphControls} title="Zoom in" aria-label="Zoom in"><Plus aria-hidden="true"/></Button><Button type="button" className="graph-control" onClick={() => graphControls?.zoomOut()} disabled={!graphControls} title="Zoom out" aria-label="Zoom out"><Minus aria-hidden="true"/></Button><Button type="button" className="graph-control center" onClick={() => graphControls?.center()} disabled={!graphControls || !nodes.length}><Crosshair aria-hidden="true"/><span>Center</span></Button></div></div><div id="graphinfo"><span className="chip">{live} running</span>{nodes.length - live > 0 && <span className="chip">{nodes.length - live} subagent</span>}{error && <span className="chip warn">unavailable: {error}</span>}</div>{!nodes.length && <div id="gempty"><div>{data.workspace ? `No agents running in ${data.workspace.name}` : "No workspace open"}</div><div>Agents started in this workspace will appear here.</div></div>}{detail && <div id="detail"><Button className="x" type="button" onClick={() => setDetail(null)} aria-label="Close details"><X aria-hidden="true"/></Button><h2>{detail.title}</h2><div className="row"><span className="k">state</span><span className="v">{stateLabel(detail.visualState)}</span></div><div className="row"><span className="k">runtime</span><span className="v">{detail.live ? `${detail.runtime} (running)` : `${detail.runtime} subagent`}</span></div><div className="row"><span className="k">directory</span><span className="v">{data.workspace?.path ?? "—"}</span></div><div className="row"><span className="k">session</span><span className="v">{detail.sessionId ?? "—"}</span></div><div className="row"><span className="k">updated</span><span className="v">{detail.live ? `started ${new Date(detail.startedAt).toLocaleTimeString()}` : `last write ${ago(detail.updated)}`}</span></div><div className="rel">{detail.parentId ? `child of ${nodes.find(node => node.id === detail.parentId)?.title ?? detail.parentId}` : detail.live ? "root agent" : "subagent session"}</div></div>}</div>{sidePanel ?? (nodes.length ? <ul id="agentlist" aria-label="Running agents">{nodes.map(node => <li key={node.id}><Button type="button" onClick={() => { setSelected(node); activate(node); }} title={node.live && node.terminalId ? `Open chat for ${node.terminalId}` : !node.live && node.runtime === "opencode" ? "Watch this subagent's activity" : "Show details"}><span className="name">{node.title}</span><span className="meta">{node.runtime} · {stateLabel(node.visualState).toLowerCase()}</span>{(node.live && node.terminalId) || (!node.live && node.runtime === "opencode") ? <span className="go">{node.live ? "open chat →" : "watch activity →"}</span> : null}</Button></li>)}</ul> : null)}</div>;
 }
