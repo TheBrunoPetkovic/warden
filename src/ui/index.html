@@ -119,14 +119,6 @@ main { flex: 1; display: grid; grid-template-columns: 236px 1fr; min-height: 0; 
 .ws.gone:hover { opacity: .85; }
 
 #newws { display: flex; gap: 5px; padding: 8px; border-top: 1px solid var(--line); flex: none; }
-#newagent {
-  margin: 6px 8px 0; padding: 7px 8px; width: calc(100% - 16px);
-  border: 1px solid var(--blue-8); border-radius: var(--r-sm);
-  background: var(--blue-3); color: var(--blue-11); font: inherit; font-size: 11px;
-  cursor: pointer; text-align: left;
-}
-#newagent:hover:not(:disabled) { background: var(--blue-4); color: var(--blue-12); }
-#newagent:disabled { opacity: .45; cursor: default; }
 #newws input {
   flex: 1; min-width: 0;
   background: var(--bg); border: 1px solid var(--line);

@@ -13,7 +13,7 @@ const api = async (path, options = {}) => {
   return json;
 };
 
-function WorkspaceRail({ workspaces, activeId, onOpen, onCreate, onDelete, onNewAgent }) {
+function WorkspaceRail({ workspaces, activeId, onOpen, onCreate, onDelete }) {
   const [name, setName] = useState("");
   const submit = async event => {
     event.preventDefault();
@@ -21,8 +21,7 @@ function WorkspaceRail({ workspaces, activeId, onOpen, onCreate, onDelete, onNew
     await onCreate(name.trim());
     setName("");
   };
-  const active = workspaces.find(workspace => workspace.id === activeId);
-  return <nav id="rail"><div className="rail-head">Workspaces <span className="count">{workspaces.length || ""}</span></div><div id="wslist">{workspaces.map(workspace => <div key={workspace.id} className={`ws${workspace.id === activeId ? " sel" : ""}${workspace.missing ? " gone" : ""}`} role="button" tabIndex="0" onClick={() => onOpen(workspace)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(workspace); } }}><div className="body"><div className="name">{workspace.name}</div><div className="path">{workspace.path}</div></div><button className="kill" onClick={event => { event.stopPropagation(); onDelete(workspace); }} title={workspace.missing ? `Forget ${workspace.name}` : `Delete ${workspace.name}`} aria-label={`Delete ${workspace.name}`}>×</button></div>)}</div><button id="newagent" type="button" onClick={onNewAgent} disabled={!active || active.missing} title={active ? `Start an OpenCode agent in ${active.name}` : "Select a workspace first"}>+ New agent</button><form id="newws" onSubmit={submit}><input value={name} onChange={event => setName(event.target.value)} placeholder="new workspace" autoComplete="off" spellCheck="false" aria-label="New workspace name"/><button className="icon-btn" type="submit" title="Create workspace" aria-label="Create workspace">+</button></form></nav>;
+  return <nav id="rail"><div className="rail-head">Workspaces <span className="count">{workspaces.length || ""}</span></div><div id="wslist">{workspaces.map(workspace => <div key={workspace.id} className={`ws${workspace.id === activeId ? " sel" : ""}${workspace.missing ? " gone" : ""}`} role="button" tabIndex="0" onClick={() => onOpen(workspace)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(workspace); } }}><div className="body"><div className="name">{workspace.name}</div><div className="path">{workspace.path}</div></div><button className="kill" onClick={event => { event.stopPropagation(); onDelete(workspace); }} title={workspace.missing ? `Forget ${workspace.name}` : `Delete ${workspace.name}`} aria-label={`Delete ${workspace.name}`}>×</button></div>)}</div><form id="newws" onSubmit={submit}><input value={name} onChange={event => setName(event.target.value)} placeholder="new workspace" autoComplete="off" spellCheck="false" aria-label="New workspace name"/><button className="icon-btn" type="submit" title="Create workspace" aria-label="Create workspace">+</button></form></nav>;
 }
 
 function ResizeGrip({ width, setWidth }) {
@@ -43,7 +42,8 @@ function ResizeGrip({ width, setWidth }) {
 }
 
 function SideTerminal({ node, terminal, width, setWidth, onClose, onExit, onToast }) {
-  return <div id="sidepanel" style={{ "--side-w": `${width}px` }}><ResizeGrip width={width} setWidth={setWidth}/><div id="sidehead" tabIndex="-1"><span className="t">{node?.title ?? terminal.name ?? terminal.id}</span><span className="m">{node?.live ? `${node.runtime} · pid ${node.pid}` : `${node?.runtime ?? "terminal"} subagent · ${terminal.id}`}</span><span className="spacer"/><button className="icon-btn" onClick={onClose} title="Close terminal panel" aria-label="Close terminal panel">×</button></div><div id="sideterm"><TerminalPane terminal={terminal} startupInput={terminal.startupInput} onExit={onExit} onError={onToast}/></div></div>;
+  const meta = node?.workspaceTerminal ? `terminal · ${terminal.id}` : node?.live ? `${node.runtime} · pid ${node.pid}` : `${node?.runtime ?? "terminal"} subagent · ${terminal.id}`;
+  return <div id="sidepanel" style={{ "--side-w": `${width}px` }}><ResizeGrip width={width} setWidth={setWidth}/><div id="sidehead" tabIndex="-1"><span className="t">{node?.title ?? terminal.name ?? terminal.id}</span><span className="m">{meta}</span><span className="spacer"/><button className="icon-btn" onClick={onClose} title="Close terminal panel" aria-label="Close terminal panel">×</button></div><div id="sideterm"><TerminalPane terminal={terminal} startupInput={terminal.startupInput} onExit={onExit} onError={onToast}/></div></div>;
 }
 
 function SubagentActivity({ node, width, setWidth, onClose, onToast }) {
@@ -71,7 +71,6 @@ export function App() {
   const [side, setSide] = useState(null);
   const [sideWidth, setSideWidth] = useState(420);
   const [toast, setToast] = useState("");
-  const activeWorkspace = workspaces.find(workspace => workspace.id === activeWs);
   const terminals = termsByWorkspace[activeWs] ?? [];
   const notify = useCallback(message => {
     setToast(message);
@@ -102,25 +101,22 @@ export function App() {
   }, [loadWorkspaces, notify, syncTerminals]);
   const openWorkspace = useCallback(async workspace => {
     if (workspace.missing) return notify(`"${workspace.name}" — its directory no longer exists.`);
-    if (workspace.id === activeWs) return;
     try {
       setActiveWs(workspace.id);
-      setSide(null);
-      await syncTerminals(workspace.id);
+      const existing = (await syncTerminals(workspace.id)).find(terminal => !terminal.dead);
+      if (existing) {
+        setSide({ kind: "terminal", termId: existing.id, node: { title: `${workspace.name} terminal`, workspaceTerminal: true } });
+        return;
+      }
+      const terminal = await api("/api/terminals", { method: "POST", body: { workspaceId: workspace.id } });
+      const next = { ...terminal, dead: false };
+      setTermsByWorkspace(current => ({ ...current, [workspace.id]: [...(current[workspace.id] ?? []), next] }));
+      setSide({ kind: "terminal", termId: next.id, node: { title: `${workspace.name} terminal`, workspaceTerminal: true } });
     } catch (error) { notify(error.message); }
-  }, [activeWs, notify, syncTerminals]);
+  }, [notify, syncTerminals]);
   const createWorkspace = async name => {
     try { const workspace = await api("/api/workspaces", { method: "POST", body: { name } }); await loadWorkspaces(); await openWorkspace(workspace); } catch (error) { notify(error.message); }
   };
-  const createAgent = useCallback(async () => {
-    if (!activeWs || !activeWorkspace || activeWorkspace.missing) return;
-    try {
-      const terminal = await api(`/api/workspaces/${encodeURIComponent(activeWs)}/agents`, { method: "POST" });
-      const next = { ...terminal, dead: false };
-      setTermsByWorkspace(current => ({ ...current, [activeWs]: [...(current[activeWs] ?? []), next] }));
-      setSide({ kind: "terminal", termId: next.id, node: { title: "New OpenCode agent", runtime: "opencode", live: true, terminalId: next.id, pid: next.pid } });
-    } catch (error) { notify(`new agent: ${error.message}`); }
-  }, [activeWs, activeWorkspace, notify]);
   const deleteWorkspace = async workspace => {
     if (!workspace.missing && !window.confirm(`Delete workspace "${workspace.name}"? Its directory and running terminals are removed.`)) return;
     try {
@@ -147,5 +143,5 @@ export function App() {
     ? <SubagentActivity node={side.node} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onToast={notify}/>
     : sideTerminal ? <SideTerminal node={side.node} terminal={sideTerminal} width={sideWidth} setWidth={setSideWidth} onClose={() => setSide(null)} onExit={markExited} onToast={notify}/>
       : null;
-  return <><div id="windowbar" aria-hidden="true"/><main><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace} onNewAgent={createAgent}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main><div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></>;
+  return <><div id="windowbar" aria-hidden="true"/><main><WorkspaceRail workspaces={workspaces} activeId={activeWs} onOpen={openWorkspace} onCreate={createWorkspace} onDelete={deleteWorkspace}/><section id="col"><div className="view on"><AgentGraph workspaceId={activeWs} onOpenTerminal={openRootTerminal} onOpenSubagent={openSubagent} sidePanel={sidePanel}/></div></section></main><div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast}</div></>;
 }
